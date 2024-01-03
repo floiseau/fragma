@@ -13,13 +13,15 @@ from models.elasticity import ElasticitySolver
 #       Crack phase=1 at crack tip? Or along the whole crack lips?
 
 # Display information
-print("""
+print(
+    """
 ███████ ██████   █████   ██████  ███    ███  █████  
 ██      ██   ██ ██   ██ ██       ████  ████ ██   ██ 
 █████   ██████  ███████ ██   ███ ██ ████ ██ ███████ 
 ██      ██   ██ ██   ██ ██    ██ ██  ██  ██ ██   ██ 
 ██      ██   ██ ██   ██  ██████  ██      ██ ██   ██
-""")
+"""
+)
 print("Fracture in Anisotropic Media using a Phase-field Model")
 print("")
 print("Author(s):")
