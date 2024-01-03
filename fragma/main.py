@@ -29,4 +29,3 @@ print("")
 # Use the solver
 solver = ElasticitySolver()
 solver.solve()
-solver.export()
