@@ -22,10 +22,21 @@ class ElasticitySolver():
         self.msh_file = "mesh.msh"
         # Elasticity
         self.pars = {"mu": 10e9, "lambda": 20e9}
-        # Setup the problem
-        self.setup_problem()
+        # Boundary conditions 
+        
+        self.facets_tags_values = {"left" : 5, # map between facet names and facet values
+                                   "right": 6}
+        # Define the displacement increments
+        self.u_incs = {
+                "left_0"  : default_scalar_type(0),
+                "left_1"  : default_scalar_type(0),
+                "right_0" : default_scalar_type(0),
+                "right_1" : default_scalar_type(1e-3)}
 
-    def setup_problem(self):
+        # Define the problem
+        self.define_problem()
+
+    def define_problem(self):
         ### Domain
         print("=== Domain")
         # Read the mesh from GMSH
@@ -40,18 +51,9 @@ class ElasticitySolver():
 
         ### Boundary Conditions
         print("=== Boundary conditions")
-        # Define the map between facet names and facet values
-        facets_tags_values = {"left" : 5,
-                              "right": 6}
-        # Define the imposed displacements
-        self.u_incs = {
-                "left_0"  : default_scalar_type(0),
-                "left_1"  : default_scalar_type(0),
-                "right_0" : default_scalar_type(0),
-                "right_1" : default_scalar_type(1e-3)}
         # Get the facets indices
         boundary_facets = {}
-        for facet_name, facet_value in facets_tags_values.items():
+        for facet_name, facet_value in self.facets_tags_values.items():
             boundary_facets[facet_name] = facet_tags.indices[facet_tags.values == facet_value]
         # Get the dimension of facets
         fdim = self.domain.topology.dim - 1
@@ -99,6 +101,7 @@ class ElasticitySolver():
         elastic_energy = 0.5 * ufl.inner(sig(u), eps(u)) * dx
         external_work = ufl.dot(f, u)*dx + ufl.dot(T, u)*ds
         total_energy = elastic_energy - external_work
+
         # Derivative of the energy
         E_u  = ufl.derivative(total_energy, u, ufl.TestFunction(V_u))
         E_du = ufl.replace(E_u, {u: ufl.TrialFunction(V_u)})
@@ -107,28 +110,48 @@ class ElasticitySolver():
                 a=ufl.lhs(E_du), L=ufl.rhs(E_du), bcs=bcs, u=u,
                 petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
 
+
+    def update_boundary_conditions(self, t: float):
+        # Iterate through the load functions
+        for facet_name, load_func in self.load_funcs.items():
+            # Increment the load function
+            with load_func.vector.localForm() as bc_local:
+                bc_local.set(t*self.u_incs[facet_name])
+
+
     def solve(self):
         print("=== Resolution")
-        self.uhs = []
+        # Start export
+        self.init_export()
+        # Start the loading iterations
         for t in range(10):
             # Update boundary conditions
-            for facet_name, load_func in self.load_funcs.items():
-                with load_func.vector.localForm() as bc_local:
-                    bc_local.set(t*self.u_incs[facet_name])
+            self.update_boundary_conditions(t)
             # Solve the displacement problem
             self.uh = self.problem_u.solve()
-            # Store the current results
-            self.uhs.append(self.uh.copy())
-    
-    def export(self):
-        ### Export
-        print("=== Export")
-        # Setup export
+            # Export the results
+            self.export_state(t)
+        # End export
+        self.end_export()
+
+
+    def init_export(self):
+        # Create the export directory
         results_folder = Path("results")
         results_folder.mkdir(exist_ok=True, parents=True)
+        # Set the name of the exported file
         filename = results_folder / "results"
-        # XDMF export
-        with io.XDMFFile(self.domain.comm, filename.with_suffix(".xdmf"), "w") as xdmf:
-            xdmf.write_mesh(self.domain)
-            for t in range(10):
-                xdmf.write_function(self.uhs[t], t)
+        # Open the file
+        self.xdmf_file = io.XDMFFile(self.domain.comm, filename.with_suffix(".xdmf"), "w")
+        # Export the mesh
+        self.xdmf_file.write_mesh(self.domain)
+    
+
+    def export_state(self, t):
+        # Export displacement file
+        self.xdmf_file.write_function(self.uh, t)
+
+
+    def end_export(self):
+        # Close the file
+        self.xdmf_file.close()
