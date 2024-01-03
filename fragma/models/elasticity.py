@@ -22,7 +22,8 @@ class ElasticitySolver():
         self.msh_file = "mesh.msh"
         # Elasticity
         self.pars = {"mu": 10e9, "lambda": 20e9}
-        # Boundary conditions
+        # Setup the problem
+        self.setup_problem()
 
     def setup_problem(self):
         ### Domain
@@ -33,11 +34,9 @@ class ElasticitySolver():
                 MPI.COMM_WORLD,
                 gdim=self.dim)
         # Define the elements
-        element = ufl.VectorElement("Lagrange", self.domain.ufl_cell(), 1)
+        element_u = ufl.VectorElement("Lagrange", self.domain.ufl_cell(), 1)
         # Define finite element spaces
-        V = fem.FunctionSpace(self.domain, element)
-        # Get the boundary integrand
-        ds = ufl.Measure("ds", domain=self.domain)
+        V_u = fem.FunctionSpace(self.domain, element_u)
 
         ### Boundary Conditions
         print("=== Boundary conditions")
@@ -45,21 +44,38 @@ class ElasticitySolver():
         facets_tags_values = {"left" : 5,
                               "right": 6}
         # Define the imposed displacements
-        bcs_u = {"left" : np.array([0, 0],       dtype=default_scalar_type),
-                 "right": np.array([1e-3, 1e-3], dtype=default_scalar_type)}
+        self.u_incs = {
+                "left_0"  : default_scalar_type(0),
+                "left_1"  : default_scalar_type(0),
+                "right_0" : default_scalar_type(0),
+                "right_1" : default_scalar_type(1e-3)}
         # Get the facets indices
         boundary_facets = {}
         for facet_name, facet_value in facets_tags_values.items():
             boundary_facets[facet_name] = facet_tags.indices[facet_tags.values == facet_value]
         # Get the dimension of facets
         fdim = self.domain.topology.dim - 1
-        # Get boundary dofs
-        boundaries = {facet_name:
-                      fem.locate_dofs_topological(V, fdim, boundary_facet)
+        # Get boundary dofs (per comp)
+        boundaries = {f"{facet_name}_{comp}" : 
+                      fem.locate_dofs_topological(
+                          (V_u.sub(comp), V_u.sub(comp).collapse()[0]), fdim, boundary_facet)
+                      for comp in range(self.dim)
                       for facet_name, boundary_facet in boundary_facets.items()}
-        # Define boundary conditions
-        self.bcs = [fem.dirichletbc(bcs_u[facet_name], boundary, V)
-                    for facet_name, boundary in boundaries.items()]
+        # Varying boundary conditions
+        bcs = []
+        self.load_funcs = {}
+        for facet_name, u_inc in self.u_incs.items():
+            # Get the component number
+            comp = int(facet_name.split("_")[-1])
+            # Define an FEM function (to control the BC)
+            self.load_funcs[facet_name] = fem.Function(V_u.sub(comp).collapse()[0])
+            # Update the load
+            with self.load_funcs[facet_name].vector.localForm() as bc_local:
+                bc_local.set(u_inc)
+            # Add the boundary conditions to the list
+            bcs.append(fem.dirichletbc(
+                self.load_funcs[facet_name], boundaries[facet_name], V_u)
+            )
         # Define the imposed stress on the remaining of the boundary
         T = fem.Constant(self.domain, default_scalar_type((0, 0)))
         # Define the volumic forces
@@ -67,31 +83,42 @@ class ElasticitySolver():
 
         ### Variational formulation
         print("=== Variational formulation")
+        # Define the state variables
+        u = fem.Function(V_u, name="Displacement")
         # Define strain
-        def epsilon(u):
+        def eps(u):
             return ufl.sym(ufl.grad(u))
         # Define stress
-        def sigma(u):
+        def sig(u):
             mu, la = self.pars["mu"], self.pars["lambda"]
-            return la*ufl.nabla_div(u)*ufl.Identity(len(u)) + 2.*mu*epsilon(u)
-        # Define the unknonw fields
-        u = ufl.TrialFunction(V)
-        # Define the test fields
-        v = ufl.TestFunction(V)
-        # Define the problem
-        self.a = ufl.inner(sigma(u), epsilon(v)) * ufl.dx
-        self.L = ufl.dot(f, v) * ufl.dx + ufl.dot(T, v) * ds
-
-        ### Assembly of the problem
-        # Define the linear problem
-        self.elasticity_problem = LinearProblem(
-                self.a, self.L, bcs=self.bcs,
-                petsc_options={"ksp_type": "preonly", "pc_type": "lu"}
-                )
+            return la*ufl.nabla_div(u)*ufl.Identity(len(u)) + 2.*mu*eps(u)
+        # Get the integrands
+        dx = ufl.Measure("dx",domain=self.domain)
+        ds = ufl.Measure("ds",domain=self.domain)
+        # Define the energy
+        elastic_energy = 0.5 * ufl.inner(sig(u), eps(u)) * dx
+        external_work = ufl.dot(f, u)*dx + ufl.dot(T, u)*ds
+        total_energy = elastic_energy - external_work
+        # Derivative of the energy
+        E_u  = ufl.derivative(total_energy, u, ufl.TestFunction(V_u))
+        E_du = ufl.replace(E_u, {u: ufl.TrialFunction(V_u)})
+        # Define the displacement problem
+        self.problem_u = LinearProblem(
+                a=ufl.lhs(E_du), L=ufl.rhs(E_du), bcs=bcs, u=u,
+                petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
 
     def solve(self):
         print("=== Resolution")
-        self.uh = self.elasticity_problem.solve()
+        self.uhs = []
+        for t in range(10):
+            # Update boundary conditions
+            for facet_name, load_func in self.load_funcs.items():
+                with load_func.vector.localForm() as bc_local:
+                    bc_local.set(t*self.u_incs[facet_name])
+            # Solve the displacement problem
+            self.uh = self.problem_u.solve()
+            # Store the current results
+            self.uhs.append(self.uh.copy())
     
     def export(self):
         ### Export
@@ -99,9 +126,9 @@ class ElasticitySolver():
         # Setup export
         results_folder = Path("results")
         results_folder.mkdir(exist_ok=True, parents=True)
-        filename = results_folder / "fundamentals"
+        filename = results_folder / "results"
         # XDMF export
         with io.XDMFFile(self.domain.comm, filename.with_suffix(".xdmf"), "w") as xdmf:
             xdmf.write_mesh(self.domain)
-            self.uh.name = "u"
-            xdmf.write_function(self.uh)
+            for t in range(10):
+                xdmf.write_function(self.uhs[t], t)

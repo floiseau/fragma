@@ -28,6 +28,5 @@ print("")
 
 # Use the solver
 solver = ElasticitySolver()
-solver.setup_problem()
 solver.solve()
 solver.export()
