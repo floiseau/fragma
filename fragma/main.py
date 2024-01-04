@@ -1,8 +1,7 @@
-from models.elasticity import ElasticitySolver
+from models.elasticity import Elasticity2DSolver
 
 # TODO
 #   Cleaning
-#       Make a recap of the parameters (in initialization)
 #       Might be able to separate the definition of the energy from the other of the code
 #   Elasticity
 #       Add plane stress
@@ -27,5 +26,5 @@ Author(s):
 )
 
 # Use the solver
-solver = ElasticitySolver()
+solver = Elasticity2DSolver()
 solver.solve()

@@ -55,10 +55,11 @@ Plane Surface(1) = {1};
 // Physical groups
 ////////////////////
 // Volume
-Physical Surface("domain", 10) = {1};
+Physical Surface("domain", 11) = {1};
 // Boundaries
-Physical Curve("bot", 7) = {1, 2};
-Physical Curve("top", 8) = {4, 5};
-Physical Curve("clamp", 9) = {3};
+Physical Curve("left_bot", 9) = {1};
+Physical Curve("bot", 7) = {2};
+Physical Curve("top", 8) = {4};
+Physical Curve("left_top", 10) = {5};
 // TODO Add grip
 
