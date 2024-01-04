@@ -7,14 +7,21 @@ msh_file = "mesh.msh"
 [mesh.physical_groups]
 bot = 7
 top = 8
-clamp = 9
+left_bot = 9
+left_top = 10
 
 [mechanical]
-mu = 20e9
-lambda = 10e9
+E = 1.9e9
+nu = 0.34
+plane_stress = true
 
 [loading]
-clamp_0 = 0.0
-bot_1 = -1e-4
-top_1 =  1e-4
+# Clamp
+left_bot_0 =  0.0
+# Bot
+left_bot_1 = -1e-4
+bot_1      = -1e-4
+# Top
+left_top_1 =  1e-4
+top_1      =  1e-4
 

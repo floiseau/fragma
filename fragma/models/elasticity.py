@@ -13,7 +13,7 @@ from dolfinx.fem.petsc import LinearProblem
 import ufl
 
 
-class ElasticitySolver:
+class Elasticity2DSolver:
     """
     TODO
     """
@@ -90,7 +90,6 @@ class ElasticitySolver:
         f = fem.Constant(self.domain, default_scalar_type((0, 0)))
 
         ### Variational formulation
-
         print("████ VARIATIONAL FORMULATION")
         # Define the state variables
         u = fem.Function(V_u, name="Displacement")
@@ -103,9 +102,21 @@ class ElasticitySolver:
 
         # Define stress
         def sig(u):
-            # Get the parameters
-            mu = self.pars["mechanical"]["mu"]
-            la = self.pars["mechanical"]["lambda"]
+            # Get the elastic parameters
+            E = self.pars["mechanical"]["E"]
+            nu = self.pars["mechanical"]["nu"]
+            # Compute Lame coefficient
+            la = E * nu / ((1 + nu) * (1 - 2 * nu))
+            mu = E / (2 * (1 + nu))
+            # Plane stress correction
+            if (
+                "plane_stress" in self.pars["mechanical"]
+                and self.pars["mechanical"]["plane_stress"]
+            ):
+                print("Info    : Plane stress assumption")
+                la = 2 * mu * la / (la + 2 * mu)
+            else:
+                print("Info    : Plane strain assumption")
             # Compute the stess
             return la * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2.0 * mu * eps(u)
 
