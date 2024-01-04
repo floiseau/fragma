@@ -1,7 +1,10 @@
-# Temp files
-*.msh
+# Result files
 *.xdmf
 *.h5
+
+# GMSH files
+*.msh
+*.db
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

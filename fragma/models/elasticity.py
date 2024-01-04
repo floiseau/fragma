@@ -1,4 +1,7 @@
+import tomllib
+import json
 from pathlib import Path
+import pprint
 
 from mpi4py import MPI
 import numpy as np
@@ -17,43 +20,36 @@ class ElasticitySolver:
 
     def __init__(self):
         ### Parameters
-        print("=== Parameters")
-        # Geometry
-        self.dim = 2
-        self.msh_file = "mesh.msh"
-        # Elasticity
-        self.pars = {"mu": 10e9, "lambda": 20e9}
+        print("████ PARAMETERS")
+        # Read the parameter file
+        with open("parameters.toml", "rb") as toml_file:
+            self.pars = tomllib.load(toml_file)
+        # Load some main parameters
+        self.dim = self.pars["mesh"]["dim"]
         # Boundary conditions
-
-        self.facets_tags_values = {
-            "left": 5,  # map between facet names and facet values
-            "right": 6,
-        }
+        self.facets_tags_values = self.pars["mesh"]["physical_groups"]
         # Define the displacement increments
-        self.u_incs = {
-            "left_0": default_scalar_type(0),
-            "left_1": default_scalar_type(0),
-            "right_0": default_scalar_type(0),
-            "right_1": default_scalar_type(1e-3),
-        }
-
+        self.u_incs = self.pars["loading"]
+        # Display a summary
+        print(json.dumps(self.pars, indent=4), "\n")
         # Define the problem
         self.define_problem()
 
     def define_problem(self):
         ### Domain
-        print("=== Domain")
+        print("████ DOMAIN")
         # Read the mesh from GMSH
+        msh_file = self.pars["mesh"]["msh_file"]
         self.domain, cell_tags, facet_tags = io.gmshio.read_from_msh(
-            self.msh_file, MPI.COMM_WORLD, gdim=self.dim
+            msh_file, MPI.COMM_WORLD, gdim=self.dim
         )
         # Define the elements
         element_u = ufl.VectorElement("Lagrange", self.domain.ufl_cell(), 1)
         # Define finite element spaces
         V_u = fem.FunctionSpace(self.domain, element_u)
-
-        ### Boundary Conditions
-        print("=== Boundary conditions")
+        ### Locate Boundary
+        print("████ LOCATE BOUNDARIES")
+        # Read the mesh from GMSH
         # Get the facets indices
         boundary_facets = {}
         for facet_name, facet_value in self.facets_tags_values.items():
@@ -70,6 +66,7 @@ class ElasticitySolver:
             for comp in range(self.dim)
             for facet_name, boundary_facet in boundary_facets.items()
         }
+        ### Apply loads
         # Varying boundary conditions
         bcs = []
         self.load_funcs = {}
@@ -93,9 +90,12 @@ class ElasticitySolver:
         f = fem.Constant(self.domain, default_scalar_type((0, 0)))
 
         ### Variational formulation
-        print("=== Variational formulation")
+
+        print("████ VARIATIONAL FORMULATION")
         # Define the state variables
         u = fem.Function(V_u, name="Displacement")
+        # Define the state vector
+        self.state = {"u": u}
 
         # Define strain
         def eps(u):
@@ -103,7 +103,10 @@ class ElasticitySolver:
 
         # Define stress
         def sig(u):
-            mu, la = self.pars["mu"], self.pars["lambda"]
+            # Get the parameters
+            mu = self.pars["mechanical"]["mu"]
+            la = self.pars["mechanical"]["lambda"]
+            # Compute the stess
             return la * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2.0 * mu * eps(u)
 
         # Get the integrands
@@ -123,7 +126,7 @@ class ElasticitySolver:
             L=ufl.rhs(E_du),
             bcs=bcs,
             u=u,
-            petsc_options={"ksp_type": "preonly", "pc_type": "lu"},
+            petsc_options={"ksp_type": "preonly", "pc_type": "cholesky"},
         )
 
     def update_boundary_conditions(self, t: float):
@@ -131,10 +134,10 @@ class ElasticitySolver:
         for facet_name, load_func in self.load_funcs.items():
             # Increment the load function
             with load_func.vector.localForm() as bc_local:
-                bc_local.set(t * self.u_incs[facet_name])
+                bc_local.set(default_scalar_type(t * self.u_incs[facet_name]))
 
     def solve(self):
-        print("=== Resolution")
+        print("████ RESOLUTION")
         # Start export
         self.init_export()
         # Start the loading iterations
@@ -142,7 +145,7 @@ class ElasticitySolver:
             # Update boundary conditions
             self.update_boundary_conditions(t)
             # Solve the displacement problem
-            self.uh = self.problem_u.solve()
+            self.problem_u.solve()
             # Export the results
             self.export_state(t)
         # End export
@@ -163,7 +166,7 @@ class ElasticitySolver:
 
     def export_state(self, t):
         # Export displacement file
-        self.xdmf_file.write_function(self.uh, t)
+        self.xdmf_file.write_function(self.state["u"], t)
 
     def end_export(self):
         # Close the file
