@@ -20,7 +20,7 @@ class Elasticity2DSolver:
 
     def __init__(self):
         ### Parameters
-        print("████ PARAMETERS")
+        print("\n████ PARAMETERS")
         # Read the parameter file
         with open("parameters.toml", "rb") as toml_file:
             self.pars = tomllib.load(toml_file)
@@ -28,18 +28,20 @@ class Elasticity2DSolver:
         self.dim = self.pars["model"]["dim"]
         # Boundary conditions
         self.facets_tags_values = self.pars["mesh"]["physical_groups"]
-        # Define the displacement increments
-        self.u_incs = self.pars["loading"]
+        # Get the loading parameters
+        self.t_max = self.pars["loading"]["t_max"]
+        self.u_incs = self.pars["loading"]["u_incs"]
         # Display a summary
-        print(json.dumps(self.pars, indent=4), "\n")
+        print(json.dumps(self.pars, indent=4))
         # Define the problem
         self.define_problem()
 
     def define_problem(self):
         ### Domain
-        print("████ DOMAIN")
+        print("\n████ DOMAIN")
         # Read the mesh from GMSH
         msh_file = self.pars["mesh"]["msh_file"]
+        print("Mesh reading output:")
         self.domain, cell_tags, facet_tags = io.gmshio.read_from_msh(
             msh_file, MPI.COMM_WORLD, gdim=self.dim
         )
@@ -48,7 +50,7 @@ class Elasticity2DSolver:
         # Define finite element spaces
         V_u = fem.FunctionSpace(self.domain, element_u)
         ### Locate Boundary
-        print("████ LOCATE BOUNDARIES")
+        print("\n████ LOCATE BOUNDARIES")
         # Read the mesh from GMSH
         # Get the facets indices
         boundary_facets = {}
@@ -90,7 +92,7 @@ class Elasticity2DSolver:
         f = fem.Constant(self.domain, default_scalar_type((0, 0)))
 
         ### Variational formulation
-        print("████ VARIATIONAL FORMULATION")
+        print("\n████ VARIATIONAL FORMULATION")
         # Define the state variables
         u = fem.Function(V_u, name="Displacement")
         # Define the state vector
@@ -112,10 +114,10 @@ class Elasticity2DSolver:
             assumption = self.pars["model"]["2D_assumption"]
             match assumption:
                 case "plane_stress":
-                    print("Info    : Plane stress assumption")
+                    print("Plane stress assumption")
                     la = 2 * mu * la / (la + 2 * mu)
                 case "plane_strain":
-                    print("Info    : Plane strain assumption")
+                    print("Plane strain assumption")
                 case _:
                     raise ValueError(f'The 2D assumption "{assumption}" in unknown')
             # Compute the stess
@@ -149,11 +151,13 @@ class Elasticity2DSolver:
                 bc_local.set(default_scalar_type(t * self.u_incs[facet_name]))
 
     def solve(self):
-        print("████ RESOLUTION")
+        print("\n████ RESOLUTION")
         # Start export
         self.init_export()
         # Start the loading iterations
-        for t in range(10):
+        for t in range(self.t_max + 1):
+            # Display information
+            print(f"== Load step {t}/{self.t_max}")
             # Update boundary conditions
             self.update_boundary_conditions(t)
             # Solve the displacement problem
