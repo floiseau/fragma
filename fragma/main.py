@@ -38,7 +38,7 @@ with open("parameters.toml", "rb") as toml_file:
 model = pars["model"]["name"]
 match model:
     case "elasticity":
-        if pars["model"]["dim"] == 2:
+        if pars["model"]["dim"] in [2, 3]:
             solver = Elasticity2DSolver(pars)
         else:
             raise NotImplementedError(f"Solver for 3D elasticity is not implemented.")
