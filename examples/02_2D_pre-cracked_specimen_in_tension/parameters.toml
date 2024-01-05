@@ -17,6 +17,9 @@ E = 1.9e9
 nu = 0.34
 
 [loading]
+t_max = 10
+
+[loading.u_incs]
 # Clamp
 left_bot_0 =  0.0
 # Bot

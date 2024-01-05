@@ -15,6 +15,9 @@ E = 30e9
 nu = 0.3
 
 [loading]
+t_max = 10
+
+[loading.u_incs]
 left_0 = 0
 left_1 = 0
 right_0 = 0
