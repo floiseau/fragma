@@ -7,7 +7,7 @@ import ufl
 from models.solver import Solver
 
 
-class Elasticity2DSolver(Solver):
+class ElasticitySolver(Solver):
     """
     Solver for 2D elasticity problem (in plane strain or plain stress).
     The loading are proportional to time.
