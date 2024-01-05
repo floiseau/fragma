@@ -1,0 +1,26 @@
+[model]
+name = "elasticity"
+dim = 3
+
+[mesh]
+msh_file = "mesh.msh"
+
+[mesh.physical_groups]
+bot = 13
+top = 14
+
+[mechanical]
+E = 30e9
+nu = 0.3
+
+[loading]
+t_max = 10
+
+[loading.u_incs]
+bot_0 = 0
+bot_1 = 0
+bot_2 = 0
+top_0 = 0
+top_1 = 1e-3
+top_2 = 0
+
