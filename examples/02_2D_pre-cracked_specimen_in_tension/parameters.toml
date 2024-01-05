@@ -1,7 +1,9 @@
-model = "elasticity"
+[model]
+name = "elasticity"
+dim = 2
+2D_assumption = "plane_stress"
 
 [mesh]
-dim = 2
 msh_file = "mesh.msh"
 
 [mesh.physical_groups]
@@ -13,7 +15,6 @@ left_top = 10
 [mechanical]
 E = 1.9e9
 nu = 0.34
-plane_stress = true
 
 [loading]
 # Clamp
