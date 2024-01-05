@@ -25,7 +25,7 @@ class Elasticity2DSolver:
         with open("parameters.toml", "rb") as toml_file:
             self.pars = tomllib.load(toml_file)
         # Load some main parameters
-        self.dim = self.pars["mesh"]["dim"]
+        self.dim = self.pars["model"]["dim"]
         # Boundary conditions
         self.facets_tags_values = self.pars["mesh"]["physical_groups"]
         # Define the displacement increments
@@ -108,15 +108,16 @@ class Elasticity2DSolver:
             # Compute Lame coefficient
             la = E * nu / ((1 + nu) * (1 - 2 * nu))
             mu = E / (2 * (1 + nu))
-            # Plane stress correction
-            if (
-                "plane_stress" in self.pars["mechanical"]
-                and self.pars["mechanical"]["plane_stress"]
-            ):
-                print("Info    : Plane stress assumption")
-                la = 2 * mu * la / (la + 2 * mu)
-            else:
-                print("Info    : Plane strain assumption")
+            # Check the 2D assumption
+            assumption = self.pars["model"]["2D_assumption"]
+            match assumption:
+                case "plane_stress":
+                    print("Info    : Plane stress assumption")
+                    la = 2 * mu * la / (la + 2 * mu)
+                case "plane_strain":
+                    print("Info    : Plane strain assumption")
+                case _:
+                    raise ValueError(f'The 2D assumption "{assumption}" in unknown')
             # Compute the stess
             return la * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2.0 * mu * eps(u)
 
