@@ -1,18 +1,23 @@
 import tomllib
 
+from dolfinx import log
+
 from models.elasticity import ElasticitySolver
+from models.fracture import FractureSolver
 
 # TODO
-#   Loading
-#       Impose the displacement in the "volume"
-#   Elasticity
+#   Cleaning
+#       Clean the FractureSolver
+#           Global cleaning
+#           Separate the energies
+#           Clean the definition of the crack phase problem
+#   Fracture
+#       Add weak anisotropy
+#   Fracture
+#       Implement the staggered path-following approach (based on dissipation or the integral of crack phase)
+#   Post-process
 #       Compute and export the strain
 #       Compute and export the stress
-#   Cleaning
-#       Might be able to separate the definition of the energy from the other in the code
-#   Fracture
-#       Add a residual stiffness
-#       Crack phase=1 at crack tip? Or along the whole crack lips?
 
 # Display header
 print(
@@ -30,6 +35,9 @@ Author(s):
 """
 )
 
+# # Set the log level
+# log.set_log_level(log.LogLevel.INFO)
+
 # Read the parameter file
 with open("parameters.toml", "rb") as toml_file:
     pars = tomllib.load(toml_file)
@@ -39,6 +47,8 @@ model = pars["model"]["name"]
 match model:
     case "elasticity":
         solver = ElasticitySolver(pars)
+    case "fracture":
+        solver = FractureSolver(pars)
     case _:
         raise NotImplementedError(f"Model '{model}' is not implemented.")
 

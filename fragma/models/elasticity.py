@@ -73,6 +73,8 @@ class ElasticitySolver(Solver):
 
     def define_displacement_problem(self):
         print("\n████ DEFINITION OF THE DISPLACEMENT PROBLEM")
+        # Define the boundary condition functions for displacement
+        self.define_displacement_boundary_condition_functions()
         # Get the state variables
         u = self.state["u"]
         # Derivative of the energy with respect to displacement to obtain the linear problem to determine the stationary point
@@ -82,7 +84,7 @@ class ElasticitySolver(Solver):
         self.problem_u = LinearProblem(
             a=ufl.lhs(E_du),
             L=ufl.rhs(E_du),
-            bcs=self.bcs,
+            bcs=self.bcs_u,
             u=u,
             petsc_options={"ksp_type": "preonly", "pc_type": "cholesky"},
         )
@@ -90,15 +92,6 @@ class ElasticitySolver(Solver):
     def define_problems(self):
         # Define the displacement problem
         self.define_displacement_problem()
-
-    def update_boundary_conditions(self, t: float):
-        # Get displacement increments
-        u_incs = self.pars["loading"]["u_incs"]
-        # Iterate through the load functions
-        for facet_name, load_func in self.load_funcs.items():
-            # Increment the load function
-            with load_func.vector.localForm() as bc_local:
-                bc_local.set(default_scalar_type(t * u_incs[facet_name]))
 
     def solve_iteration(self):
         # Solve the displacement problem

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+# Generate the mesh
+gmsh -2 mesh.geo
+
+# Run the simulation
+# mpirun -n 4 micromamba run -n fenicsx-env python ../../fragma/main.py
+micromamba run -n fenicsx-env python ../../fragma/main.py
+

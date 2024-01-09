@@ -3,7 +3,7 @@ import json
 
 from mpi4py import MPI
 
-from dolfinx import io, fem
+from dolfinx import io, fem, default_scalar_type
 
 
 class Solver:
@@ -15,11 +15,9 @@ class Solver:
         # Display a summary
         print(json.dumps(self.pars, indent=4))
         # Define the domain
-        self.domain, cell_tags, facet_tags = self.define_domain()
+        self.domain, cell_tags, self.facet_tags = self.define_domain()
         # Define the state variables
         self.define_state_variables()
-        # Define the boundary condition functions
-        self.define_boundary_condition_functions(facet_tags)
         # Define the energy
         self.define_total_energy()
         # Define problems
@@ -56,7 +54,7 @@ class Solver:
             "Solver: The method 'define_total_energy' must be implemented in the child class."
         )
 
-    def define_boundary_condition_functions(self, facet_tags):
+    def define_displacement_boundary_condition_functions(self):
         ### Locate Boundary
         print("\n████ LOCATE BOUNDARIES")
         # Get the physical groups (mapping between pg and their indices)
@@ -64,8 +62,8 @@ class Solver:
         # Get the facets indices
         boundary_facets = {}
         for facet_name, facet_value in facets_tags_values.items():
-            boundary_facets[facet_name] = facet_tags.indices[
-                facet_tags.values == facet_value
+            boundary_facets[facet_name] = self.facet_tags.indices[
+                self.facet_tags.values == facet_value
             ]
         # Get the dimensions of domain and facets
         dim = self.domain.topology.dim
@@ -85,7 +83,7 @@ class Solver:
         # Get displacement increments
         u_incs = self.pars["loading"]["u_incs"]
         # Create variables to store bcs and loading functions
-        self.bcs = []
+        self.bcs_u = []
         self.load_funcs = {}
         # Iterage through the displacement increments
         for facet_name, u_inc in u_incs.items():
@@ -97,11 +95,20 @@ class Solver:
             with self.load_funcs[facet_name].vector.localForm() as bc_local:
                 bc_local.set(u_inc)
             # Add the boundary conditions to the list
-            self.bcs.append(
+            self.bcs_u.append(
                 fem.dirichletbc(
                     self.load_funcs[facet_name], boundaries[facet_name], self.V_u
                 )
             )
+
+    def update_boundary_conditions(self, t: float):
+        # Get displacement increments
+        u_incs = self.pars["loading"]["u_incs"]
+        # Iterate through the load functions
+        for facet_name, load_func in self.load_funcs.items():
+            # Increment the load function
+            with load_func.vector.localForm() as bc_local:
+                bc_local.set(default_scalar_type(t * u_incs[facet_name]))
 
     def solve(self):
         print("\n████ RESOLUTION")

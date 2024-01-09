@@ -1,0 +1,35 @@
+[model]
+name = "fracture"
+dim = 2
+2D_assumption = "plane_stress"
+model = "AT1"
+
+[mesh]
+msh_file = "mesh.msh"
+
+[mesh.physical_groups]
+bot = 9
+top = 10
+crack = 12
+
+[numerical]
+atol = 1e-3
+max_iter = 100
+alpha_res = 1e-6
+
+[mechanical]
+E = 3e9
+nu = 0.4
+Gc = 380
+ell = 0.6e-3 # Real value 0.3e-3
+
+[loading]
+t_max = 100
+
+[loading.u_incs]
+# Clamp
+bot_0 =  0.0
+bot_1 =  0.0
+# Top
+top_1 = 2e-5
+
