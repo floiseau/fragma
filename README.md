@@ -42,6 +42,6 @@ TODO
 
 - [FEniCSx tutorial](https://jsdokken.com/dolfinx-tutorial/index.html)
 - [DOLFINx documentation](https://docs.fenicsproject.org/dolfinx/main/python/index.html)
-- [NewFrac FEniCSx Training](https://newfrac.gitlab.io/newfrac-fenicsx-training/04-phase-field/phase-field.html#time-stepping-solving-a-quasi-static-problem)
-- [https://bitbucket.org/bin-mech/anisotropic-gradient-damage](https://bitbucket.org/bin-mech/anisotropic-gradient-damage)
-- [https://github.com/jaedong2019/Monotonic_loading](https://github.com/jaedong2019/Monotonic_loading)
+- [NewFrac FEniCSx Training](https://newfrac.gitlab.io/newfrac-fenicsx-training/04-phase-field/phase-field.html#time-stepping-solving-a-quasi-static-problem) (outdated)
+- [https://bitbucket.org/bin-mech/anisotropic-gradient-damage](https://bitbucket.org/bin-mech/anisotropic-gradient-damage) (legacy fenics)
+- [https://github.com/jaedong2019/Monotonic_loading](https://github.com/jaedong2019/Monotonic_loading) (legacy fenics)
