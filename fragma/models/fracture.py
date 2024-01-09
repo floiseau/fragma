@@ -31,8 +31,6 @@ class FractureSolver(Solver):
         alpha = fem.Function(self.V_alpha, name="CrackPhase")
         # Define the state vector
         self.state = {"u": u, "alpha": alpha}
-        # Define the old variable of alpha (for irreversibility)
-        self.alpha_old = fem.Function(alpha.function_space)
 
     def eps(self, u):
         return ufl.sym(ufl.grad(u))
@@ -246,9 +244,8 @@ class FractureSolver(Solver):
         # Set the crack phrase boundary bound (Note: they are passed as reference and not as values)
         self.problem_alpha.setVariableBounds(self.alpha_lb.vector, self.alpha_ub.vector)
 
-        # Initialise alpha and alpha_old
+        # Initialise alpha
         self.alpha_lb.vector.copy(alpha.vector)
-        self.alpha_lb.vector.copy(self.alpha_old.vector)
 
         # Display information about the displacement solver
         self.problem_alpha.view()
@@ -270,8 +267,9 @@ class FractureSolver(Solver):
         u, alpha = self.state["u"], self.state["alpha"]
         # Update the crack phase lower bound
         alpha.vector.copy(self.alpha_lb.vector)
-        # Reset alpha_old
-        with self.alpha_old.vector.localForm() as alpha_old_local:
+        # Define alpha at previous iteration for irreversibility
+        alpha_old = fem.Function(alpha.function_space)
+        with alpha_old.vector.localForm() as alpha_old_local:
             alpha_old_local.set(0.0)
         # Perform the alternate minimization
         for t in range(self.pars["numerical"]["max_iter"]):
@@ -285,11 +283,11 @@ class FractureSolver(Solver):
             time_alpha = time.perf_counter() - time_alpha_start
             # Check error
             L2_error = fem.form(
-                ufl.inner(alpha - self.alpha_old, alpha - self.alpha_old) * self.dx
+                ufl.inner(alpha - alpha_old, alpha - alpha_old) * self.dx
             )
             error_L2 = np.sqrt(fem.assemble_scalar(L2_error))
             # Update alpha_old
-            alpha.vector.copy(self.alpha_old.vector)
+            alpha.vector.copy(alpha_old.vector)
             # Display information
             self.monitor(t, error_L2, time_u, time_alpha)
             # Check convergence
