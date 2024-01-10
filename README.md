@@ -40,8 +40,17 @@ TODO
 
 ## Ressources used to make the code
 
-- [FEniCSx tutorial](https://jsdokken.com/dolfinx-tutorial/index.html)
-- [DOLFINx documentation](https://docs.fenicsproject.org/dolfinx/main/python/index.html)
-- [NewFrac FEniCSx Training](https://newfrac.gitlab.io/newfrac-fenicsx-training/04-phase-field/phase-field.html#time-stepping-solving-a-quasi-static-problem) (outdated)
-- [https://bitbucket.org/bin-mech/anisotropic-gradient-damage](https://bitbucket.org/bin-mech/anisotropic-gradient-damage) (legacy fenics)
-- [https://github.com/jaedong2019/Monotonic_loading](https://github.com/jaedong2019/Monotonic_loading) (legacy fenics)
+- Generic 
+    - [FEniCSx tutorial](https://jsdokken.com/dolfinx-tutorial/index.html)
+    - [DOLFINx documentation](https://docs.fenicsproject.org/dolfinx/main/python/index.html)
+    - [NewFrac FEniCSx Training](https://newfrac.gitlab.io/newfrac-fenicsx-training/04-phase-field/phase-field.html#time-stepping-solving-a-quasi-static-problem) (outdated)
+- Implementations of phase-field fracture
+    - [https://bitbucket.org/bin-mech/anisotropic-gradient-damage](https://bitbucket.org/bin-mech/anisotropic-gradient-damage) (legacy fenics)
+    - [https://github.com/jaedong2019/Monotonic_loading](https://github.com/jaedong2019/Monotonic_loading) (legacy fenics)
+- Numerical optimizations
+    - Elasticity solver
+        - [Fenicsx demo: Elasticity using algebraic multigrid](https://docs.fenicsproject.org/dolfinx/main/python/demos/demo_elasticity.html)
+    - Over-relaxation
+        - Farrell, P., & Maurini, C. (2017). Linear and nonlinear solvers for variational phase-field models of brittle fracture. International Journal for Numerical Methods in Engineering, 109(5), 648–667. [https://doi.org/10.1002/nme.5300](https://doi.org/10.1002/nme.5300)
+
+

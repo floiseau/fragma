@@ -8,8 +8,9 @@ from dolfinx import fem, default_scalar_type, la
 from dolfinx.fem.petsc import LinearProblem
 import ufl
 
-from utils.snes_problem import SNESProblem
 from models.solver import Solver
+from utils.snes_problem import SNESProblem
+from utils.build_nullspace import build_elasticity_nullspace
 
 
 class FractureSolver(Solver):
@@ -150,11 +151,19 @@ class FractureSolver(Solver):
                 "ksp_atol": 1e-10,
                 "ksp_max_it": 1000,
                 "pc_type": "gamg",
-                "pc_gamg_agg_nsmooths": 1,  #  "pc_gamg_esteig_ksp_type": "cg",
+                "pc_gamg_agg_nsmooths": 1,
+                "pc_gamg_esteig_ksp_type": "cg",
             },
-            # petsc_options={"ksp_type": "cg", "ksp_rtol": 1e-6, "ksp_atol": 1e-10, "ksp_max_it": 1000, "pc_type":"hypre"},
-            # petsc_options={"ksp_type": "preonly", "pc_type":"lu", "pc_factor_solver_type": "mumps"},
+            # petsc_options={
+            #     "ksp_type": "preonly",
+            #     "pc_type": "lu",
+            #     "pc_factor_solver_type": "mumps",
+            # },
         )
+        # Define the null space (optimization with GAMG PC)
+        ns = build_elasticity_nullspace(self.V_u)
+        self.problem_u.A.setNearNullSpace(ns)
+        self.problem_u.A.setOption(PETSc.Mat.Option.SPD, True)  # type: ignore
         # Display information about the displacement solver
         self.problem_u.solver.view()
 
@@ -271,16 +280,37 @@ class FractureSolver(Solver):
         alpha_old = fem.Function(alpha.function_space)
         with alpha_old.vector.localForm() as alpha_old_local:
             alpha_old_local.set(0.0)
+        # Get previous displacement (for over-relaxation)
+        relaxation = "omega" in self.pars["numerical"]
+        if relaxation:
+            omega = self.pars["numerical"]["omega"]
+            u_old = u.copy()
         # Perform the alternate minimization
         for t in range(self.pars["numerical"]["max_iter"]):
             # Solve the displacement problem
             time_u_start = time.perf_counter()
             self.problem_u.solve()
             time_u = time.perf_counter() - time_u_start
+            # Perform displacement relaxiation
+            if relaxation:
+                u.vector[:] = u_old.vector[:] + omega * (u.vector[:] - u_old.vector[:])
+                u.vector.assemble()
             # Solve the crack phase problem
             time_alpha_start = time.perf_counter()
             self.problem_alpha.solve(None, alpha.vector)
             time_alpha = time.perf_counter() - time_alpha_start
+            # Perform crack phase relaxation
+            if relaxation:
+                dalpha = alpha.vector[:] - alpha_old.vector[:]
+                omega_bar = omega * np.ones((len(dalpha),))
+                new_alpha = alpha_old.vector[:] + omega_bar * dalpha
+                # Add a counter
+                while new_alpha.max() > 1.0:
+                    omega_bar = 1 / 2 * (1 + omega_bar)
+                    new_alpha = alpha_old.vector[:] + omega_bar * dalpha
+                alpha.vector[:] = alpha_old.vector[:] + omega_bar * dalpha
+                alpha.vector.assemble()
+                print(f"Crack phase relaxation: f{omega_bar[0]}")
             # Check error
             L2_error = fem.form(
                 ufl.inner(alpha - alpha_old, alpha - alpha_old) * self.dx

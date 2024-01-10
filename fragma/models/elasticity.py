@@ -5,6 +5,7 @@ from dolfinx.fem.petsc import LinearProblem
 import ufl
 
 from models.solver import Solver
+from utils.build_nullspace import build_elasticity_nullspace
 
 
 class ElasticitySolver(Solver):
@@ -86,8 +87,27 @@ class ElasticitySolver(Solver):
             L=ufl.rhs(E_du),
             bcs=self.bcs_u,
             u=u,
-            petsc_options={"ksp_type": "preonly", "pc_type": "cholesky"},
+            petsc_options={
+                "ksp_type": "cg",
+                "ksp_rtol": 1e-8,
+                "ksp_atol": 1e-10,
+                "ksp_max_it": 1000,
+                "pc_type": "gamg",
+                "pc_gamg_agg_nsmooths": 1,
+                "pc_gamg_esteig_ksp_type": "cg",
+            },
+            # petsc_options={
+            #     "ksp_type": "preonly",
+            #     "pc_type": "lu",
+            #     "pc_factor_solver_type": "mumps",
+            # },
         )
+        # Define the null space (optimization with GAMG PC)
+        ns = build_elasticity_nullspace(self.V_u)
+        self.problem_u.A.setNearNullSpace(ns)
+        self.problem_u.A.setOption(PETSc.Mat.Option.SPD, True)  # type: ignore
+        # Display information about the displacement solver
+        self.problem_u.solver.view()
 
     def define_problems(self):
         # Define the displacement problem
