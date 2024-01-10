@@ -101,7 +101,7 @@ class Solver:
                 )
             )
 
-    def update_boundary_conditions(self, t: float):
+    def update_displacement_boundary_conditions(self, t: float):
         # Get displacement increments
         u_incs = self.pars["loading"]["u_incs"]
         # Iterate through the load functions
@@ -117,8 +117,8 @@ class Solver:
         for t in range(t_max + 1):
             # Display information
             print(f"== Load step {t}/{t_max}")
-            # Update boundary conditions
-            self.update_boundary_conditions(t)
+            # Update displacement boundary conditions
+            self.update_displacement_boundary_conditions(t)
             # Solve the problems for this iteration
             self.solve_iteration()
             # Export the results

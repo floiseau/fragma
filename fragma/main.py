@@ -6,11 +6,6 @@ from models.elasticity import ElasticitySolver
 from models.fracture import FractureSolver
 
 # TODO
-#   Cleaning
-#       Clean the FractureSolver
-#           Global cleaning
-#           Separate the energies
-#           Clean the definition of the crack phase problem
 #   Fracture
 #       Add weak anisotropy
 #   Fracture
@@ -49,6 +44,9 @@ match model:
         solver = ElasticitySolver(pars)
     case "fracture":
         solver = FractureSolver(pars)
+    case "fracture_path_following":
+        # solver = FracturePathFollowingSolver(pars)
+        raise NotImplementedError(f"Model '{model}' is not implemented.")
     case _:
         raise NotImplementedError(f"Model '{model}' is not implemented.")
 
