@@ -66,8 +66,8 @@ class Solver:
                 self.facet_tags.values == facet_value
             ]
         # Get the dimensions of domain and facets
-        dim = self.domain.topology.dim
-        fdim = self.domain.topology.dim - 1
+        dim = self.domain.geometry.dim
+        fdim = self.domain.geometry.dim - 1
         # Get boundary dofs (per comp)
         boundaries = {
             f"{facet_name}_{comp}": fem.locate_dofs_topological(

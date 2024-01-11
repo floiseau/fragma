@@ -44,6 +44,9 @@ match model:
         solver = ElasticitySolver(pars)
     case "fracture":
         solver = FractureSolver(pars)
+    case "fracture_monolithic":
+        # solver = FractureMonolithicSolver(pars)
+        raise NotImplementedError(f"Model '{model}' is not implemented.")
     case "fracture_path_following":
         # solver = FracturePathFollowingSolver(pars)
         raise NotImplementedError(f"Model '{model}' is not implemented.")

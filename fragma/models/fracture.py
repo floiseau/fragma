@@ -103,7 +103,7 @@ class FractureSolver(Solver):
 
     def define_total_energy(self):
         # Get the dimension of the domain
-        dim = self.domain.topology.dim
+        dim = self.domain.geometry.dim
         # Get the integrands
         self.dx = ufl.Measure("dx", domain=self.domain)
         ds = ufl.Measure("ds", domain=self.domain)
@@ -179,8 +179,8 @@ class FractureSolver(Solver):
                     self.facet_tags.values == facet_value
                 ]
             # Get the dimensions of domain and facets
-            dim = self.domain.topology.dim
-            fdim = self.domain.topology.dim - 1
+            dim = self.domain.geometry.dim
+            fdim = self.domain.geometry.dim - 1
             # Get boundary dofs (per comp)
             boundaries = {
                 f"{facet_name}": fem.locate_dofs_topological(
