@@ -1,5 +1,7 @@
 import numpy as np
 
+from petsc4py import PETSc
+
 from dolfinx import fem, default_scalar_type
 from dolfinx.fem.petsc import LinearProblem
 import ufl
