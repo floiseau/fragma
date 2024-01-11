@@ -5,7 +5,7 @@ from dolfinx.fem import FunctionSpace
 
 
 def build_elasticity_nullspace(V: FunctionSpace):
-    match V.mesh.topology.dim:
+    match V.mesh.geometry.dim:
         case 2:
             return build_2D_elasticity_nullspace(V)
         case 3:
@@ -59,7 +59,7 @@ def build_2D_elasticity_nullspace(V: FunctionSpace):
     https://docs.fenicsproject.org/dolfinx/main/python/demos/demo_elasticity.html
     """
     # Get the dimension
-    dim = V.mesh.topology.dim
+    dim = V.mesh.geometry.dim
     # Define dtype
     dtype = PETSc.ScalarType
     # Create vectors that will span the nullspace
