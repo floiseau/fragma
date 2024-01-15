@@ -118,12 +118,21 @@ class FractureSolver(Solver):
         Gc = self.pars["mechanical"]["Gc"]
         ell = self.pars["mechanical"]["ell"]
         cw = self.cw()
+        # Define the anisotry matrix
+        A_np = np.eye(dim)
+        if "aG" in self.pars["mechanical"]:
+            aG = self.pars["mechanical"]["aG"]
+            theta_0 = self.pars["mechanical"]["theta_0"]
+            A_np += aG * np.array(
+                    [[np.cos(2*theta_0), np.sin(2*theta_0)],
+                     [np.sin(2*theta_0), -np.cos(2*theta_0)]])
+        A = fem.Constant(self.domain, A_np)
         # Define the energy terms
         elastic_energy = 0.5 * ufl.inner(self.sig(u, alpha), self.eps(u)) * self.dx
         dissipated_energy = (
             Gc
             / cw
-            * (self.w(alpha) / ell + ell * ufl.dot(ufl.grad(alpha), ufl.grad(alpha)))
+            * (self.w(alpha) / ell + ell * ufl.dot(ufl.grad(alpha), A*ufl.grad(alpha)))
             * self.dx
         )
         external_work = ufl.dot(f, u) * self.dx + ufl.dot(T, u) * ds
@@ -265,10 +274,10 @@ class FractureSolver(Solver):
         # Define the crack phase problem
         self.define_crack_phase_problem()
 
-    def monitor(self, t, error_L2, time_u, time_alpha):
+    def monitor(self, t, error, time_u, time_alpha):
         if MPI.COMM_WORLD.rank == 0:
             print(
-                f"Iteration: {t:3d}, Error: {error_L2:3.4e}, Time u: {time_u:3.4e}s, Time alpha: {time_alpha:3.4e}s"
+                f"Iteration: {t:3d}, Error: {error:3.4e}, Time u: {time_u:3.4e}s, Time alpha: {time_alpha:3.4e}s"
             )
 
     def solve_iteration(self):
@@ -311,19 +320,20 @@ class FractureSolver(Solver):
                 alpha.vector[:] = alpha_old.vector[:] + omega_bar * dalpha
                 alpha.vector.assemble()
                 print(f"Crack phase relaxation: f{omega_bar[0]}")
-            # Check error
-            L2_error = fem.form(
-                ufl.inner(alpha - alpha_old, alpha - alpha_old) * self.dx
-            )
-            error_L2 = np.sqrt(fem.assemble_scalar(L2_error))
+            # Check error (L2)
+            error = np.max(alpha.vector[:] - alpha_old.vector[:])
+            # L2_error = fem.form(
+            #     ufl.inner(alpha - alpha_old, alpha - alpha_old) * self.dx
+            # )
+            # error_L2 = np.sqrt(fem.assemble_scalar(L2_error))
             # Update alpha_old
             alpha.vector.copy(alpha_old.vector)
             # Display information
-            self.monitor(t, error_L2, time_u, time_alpha)
+            self.monitor(t, error, time_u, time_alpha)
             # Check convergence
-            if error_L2 <= self.pars["numerical"]["atol"]:
+            if error <= self.pars["numerical"]["atol"]:
                 break
         else:
             raise RuntimeError(
-                f"Could not converge after {t:3d} iteration, error {error_L2:3.4e}"
+                f"Could not converge after {t:3d} iteration, error {error:3.4e}"
             )
