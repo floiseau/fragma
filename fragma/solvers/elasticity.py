@@ -1,22 +1,24 @@
-import numpy as np
-
 from petsc4py import PETSc
 
-from dolfinx import fem, default_scalar_type
+from dolfinx import fem
 from dolfinx.fem.petsc import LinearProblem
 import ufl
 
-from models.solver import Solver
+from solvers.base_solver import BaseSolver
+from models import ElasticModel
 from utils.build_nullspace import build_elasticity_nullspace
 
 
-class ElasticitySolver(Solver):
+class ElasticitySolver(BaseSolver):
     """
     Solver for 2D elasticity problem (in plane strain or plain stress).
     The loading are proportional to time.
     """
 
     def __init__(self, pars):
+        # Create the elasticity model
+        self.model = ElasticModel(pars)
+        # Initialise parent class
         super().__init__(pars)
 
     def define_state_variables(self):
@@ -31,57 +33,16 @@ class ElasticitySolver(Solver):
         # Define the state vector
         self.state = {"u": u}
 
-    def eps(self, u):
-        return ufl.sym(ufl.grad(u))
-
-    def sig(self, u):
-        # Get the elastic parameters
-        E = self.pars["mechanical"]["E"]
-        nu = self.pars["mechanical"]["nu"]
-        # Compute Lame coefficient
-        la = E * nu / ((1 + nu) * (1 - 2 * nu))
-        mu = E / (2 * (1 + nu))
-        # Check the 2D assumption
-        if self.pars["model"]["dim"] == 2:
-            assumption = self.pars["model"]["2D_assumption"]
-            match assumption:
-                case "plane_stress":
-                    print("Plane stress assumption")
-                    la = 2 * mu * la / (la + 2 * mu)
-                case "plane_strain":
-                    print("Plane strain assumption")
-                case _:
-                    raise ValueError(f'The 2D assumption "{assumption}" in unknown')
-        # Compute the stess
-        return la * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2.0 * mu * self.eps(u)
-
-    def define_total_energy(self):
-        # Get the dimension of the domain
-        dim = self.domain.geometry.dim
-        # Get the integrands
-        dx = ufl.Measure("dx", domain=self.domain)
-        ds = ufl.Measure("ds", domain=self.domain)
-        # Define the imposed stress on the remaining of the boundary
-        T = fem.Constant(self.domain, default_scalar_type([0 for d in range(dim)]))
-        # Define the volumic forces
-        f = fem.Constant(self.domain, default_scalar_type([0 for d in range(dim)]))
-        # Get state variables
-        u = self.state["u"]
-        # Define the energy terms
-        elastic_energy = 0.5 * ufl.inner(self.sig(u), self.eps(u)) * dx
-        dissipated_energy = 0.0 * dx
-        external_work = ufl.dot(f, u) * dx + ufl.dot(T, u) * ds
-        # Define the total energy
-        self.total_energy = elastic_energy + dissipated_energy - external_work
-
     def define_displacement_problem(self):
         print("\n████ DEFINITION OF THE DISPLACEMENT PROBLEM")
         # Define the boundary condition functions for displacement
         self.define_displacement_boundary_condition_functions()
         # Get the state variables
         u = self.state["u"]
+        # Get the total energy from the model
+        energy = self.model.energy(self.state, self.domain)
         # Derivative of the energy with respect to displacement to obtain the linear problem to determine the stationary point
-        E_u = ufl.derivative(self.total_energy, u, ufl.TestFunction(self.V_u))
+        E_u = ufl.derivative(energy, u, ufl.TestFunction(self.V_u))
         E_du = ufl.replace(E_u, {u: ufl.TrialFunction(self.V_u)})
         # Define the displacement problem
         self.problem_u = LinearProblem(
