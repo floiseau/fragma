@@ -6,6 +6,10 @@ from models.elasticity import ElasticitySolver
 from models.fracture import FractureSolver
 
 # TODO
+#   Cleaning
+#       Rename the "models" directory as "solvers"
+#       Put the energy calculation in a "models" directory (or directly in a model file)
+#           In this file, the energy computation depends on dx, ds and the state ?
 #   Fracture
 #       Add weak anisotropy
 #   Fracture
