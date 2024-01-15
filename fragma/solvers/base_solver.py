@@ -6,7 +6,7 @@ from mpi4py import MPI
 from dolfinx import io, fem, default_scalar_type
 
 
-class Solver:
+class BaseSolver:
     def __init__(self, pars):
         ### Parameters
         print("\n████ PARAMETERS")
@@ -18,8 +18,6 @@ class Solver:
         self.domain, cell_tags, self.facet_tags = self.define_domain()
         # Define the state variables
         self.define_state_variables()
-        # Define the energy
-        self.define_total_energy()
         # Define problems
         self.define_problems()
         # Start export
@@ -39,21 +37,6 @@ class Solver:
             "Solver: The method 'define_state_variables' must be implemented in the child class."
         )
 
-    def sig(self):
-        raise NotImplementedError(
-            "Solver: The method 'sig' must be implemented in the child class."
-        )
-
-    def eps(self):
-        raise NotImplementedError(
-            "Solver: The method 'eps' must be implemented in the child class."
-        )
-
-    def define_total_energy(self):
-        raise NotImplementedError(
-            "Solver: The method 'define_total_energy' must be implemented in the child class."
-        )
-
     def define_displacement_boundary_condition_functions(self):
         ### Locate Boundary
         print("\n████ LOCATE BOUNDARIES")
@@ -68,6 +51,7 @@ class Solver:
         # Get the dimensions of domain and facets
         dim = self.domain.geometry.dim
         fdim = self.domain.geometry.dim - 1
+
         # Get boundary dofs (per comp)
         boundaries = {
             f"{facet_name}_{comp}": fem.locate_dofs_topological(
@@ -109,6 +93,12 @@ class Solver:
             # Increment the load function
             with load_func.vector.localForm() as bc_local:
                 bc_local.set(default_scalar_type(t * u_incs[facet_name]))
+
+
+    def define_problems(self):
+        raise NotImplementedError(
+            "Solver: The method 'define_problems' must be implemented in the child class."
+        )
 
     def solve(self):
         print("\n████ RESOLUTION")

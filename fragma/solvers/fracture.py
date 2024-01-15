@@ -1,23 +1,27 @@
 import time
 
-import numpy as np
 from petsc4py import PETSc
 from mpi4py import MPI
 
-from dolfinx import fem, default_scalar_type, la
+from dolfinx import fem
 from dolfinx.fem.petsc import LinearProblem
 import ufl
 
-from models.solver import Solver
+from solvers.base_solver import BaseSolver
+from models import FractureModel
 from utils.snes_problem import SNESProblem
 from utils.build_nullspace import build_elasticity_nullspace
 
 
-class FractureSolver(Solver):
+class FractureSolver(BaseSolver):
     """TODO"""
 
     def __init__(self, pars):
+        # Create the elasticity model
+        self.model = FractureModel(pars)
+        # Initialise parent class
         super().__init__(pars)
+
 
     def define_state_variables(self):
         ### Variational formulation
@@ -33,120 +37,16 @@ class FractureSolver(Solver):
         # Define the state vector
         self.state = {"u": u, "alpha": alpha}
 
-    def eps(self, u):
-        return ufl.sym(ufl.grad(u))
-
-    def a(self, alpha):
-        # Residual crack phase
-        alpha_res = self.pars["numerical"]["alpha_res"]
-        # Get the model
-        deg_model = self.pars["model"]["model"]
-        # Compute a
-        match deg_model:
-            case "AT1":
-                return (1 - alpha) ** 2 + alpha_res
-            case "AT2":
-                return (1 - alpha) ** 2 + alpha_res
-            case _:
-                raise ValueError(
-                    f"The degradation model named '{deg_model}' does not exists."
-                )
-
-    def w(self, alpha):
-        # Get the model
-        deg_model = self.pars["model"]["model"]
-        # Compute w
-        match deg_model:
-            case "AT1":
-                return alpha
-            case "AT2":
-                return alpha**2
-            case _:
-                raise ValueError(
-                    f"The degradation model named '{deg_model}' does not exists."
-                )
-
-    def cw(self):
-        deg_model = self.pars["model"]["model"]
-        match deg_model:
-            case "AT1":
-                return 8 / 3
-            case "AT2":
-                return 2
-            case _:
-                raise ValueError(
-                    f"The degradation model named '{deg_model}' does not exists."
-                )
-
-    def sig(self, u, alpha):
-        # Get the elastic parameters
-        E = self.pars["mechanical"]["E"]
-        nu = self.pars["mechanical"]["nu"]
-        # Compute Lame coefficient
-        la = E * nu / ((1 + nu) * (1 - 2 * nu))
-        mu = E / (2 * (1 + nu))
-        # Check the 2D assumption
-        if self.pars["model"]["dim"] == 2:
-            assumption = self.pars["model"]["2D_assumption"]
-            match assumption:
-                case "plane_stress":
-                    print("Plane stress assumption")
-                    la = 2 * mu * la / (la + 2 * mu)
-                case "plane_strain":
-                    print("Plane strain assumption")
-                case _:
-                    raise ValueError(f"The 2D assumption '{assumption}' in unknown")
-        # Compute the stess
-        return self.a(alpha) * (
-            la * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2.0 * mu * self.eps(u)
-        )
-
-    def define_total_energy(self):
-        # Get the dimension of the domain
-        dim = self.domain.geometry.dim
-        # Get the integrands
-        self.dx = ufl.Measure("dx", domain=self.domain)
-        ds = ufl.Measure("ds", domain=self.domain)
-        # Define the imposed stress on the remaining of the boundary
-        T = fem.Constant(self.domain, default_scalar_type([0 for d in range(dim)]))
-        # Define the volumic forces
-        f = fem.Constant(self.domain, default_scalar_type([0 for d in range(dim)]))
-        # Get state variables
-        u = self.state["u"]
-        alpha = self.state["alpha"]
-        # Get the parameters
-        Gc = self.pars["mechanical"]["Gc"]
-        ell = self.pars["mechanical"]["ell"]
-        cw = self.cw()
-        # Define the anisotry matrix
-        A_np = np.eye(dim)
-        if "aG" in self.pars["mechanical"]:
-            aG = self.pars["mechanical"]["aG"]
-            theta_0 = self.pars["mechanical"]["theta_0"]
-            A_np += aG * np.array(
-                    [[np.cos(2*theta_0), np.sin(2*theta_0)],
-                     [np.sin(2*theta_0), -np.cos(2*theta_0)]])
-        A = fem.Constant(self.domain, A_np)
-        # Define the energy terms
-        elastic_energy = 0.5 * ufl.inner(self.sig(u, alpha), self.eps(u)) * self.dx
-        dissipated_energy = (
-            Gc
-            / cw
-            * (self.w(alpha) / ell + ell * ufl.dot(ufl.grad(alpha), A*ufl.grad(alpha)))
-            * self.dx
-        )
-        external_work = ufl.dot(f, u) * self.dx + ufl.dot(T, u) * ds
-        # Define the total energy
-        self.total_energy = elastic_energy + dissipated_energy - external_work
-
     def define_displacement_problem(self):
         # Define the boundary condition functions for displacement
         self.define_displacement_boundary_condition_functions()
         print("\n████ DEFINITION OF THE DISPLACEMENT PROBLEM")
         # Get the state variables
         u = self.state["u"]
+        # Define the energy
+        energy = self.model.energy(self.state, self.domain)
         # Derivative of the energy with respect to displacement to obtain the linear problem to determine the stationary point
-        E_u = ufl.derivative(self.total_energy, u, ufl.TestFunction(self.V_u))
+        E_u = ufl.derivative(energy, u, ufl.TestFunction(self.V_u))
         E_du = ufl.replace(E_u, {u: ufl.TrialFunction(self.V_u)})
         # Define the displacement problem
         self.problem_u = LinearProblem(
@@ -218,10 +118,10 @@ class FractureSolver(Solver):
         self.define_crack_phase_boundary_condition_functions()
         # Get the state variables
         u, alpha = self.state["u"], self.state["alpha"]
+        # Define the energy
+        energy = self.model.energy(self.state, self.domain)
         # Derivative of the energy with respect to crack phase
-        E_alpha = ufl.derivative(
-            self.total_energy, alpha, ufl.TestFunction(self.V_alpha)
-        )
+        E_alpha = ufl.derivative(energy, alpha, ufl.TestFunction(self.V_alpha))
         E_alpha_alpha = ufl.derivative(E_alpha, alpha, ufl.TrialFunction(self.V_alpha))
 
         # Define the crack phase problem
@@ -322,10 +222,6 @@ class FractureSolver(Solver):
                 print(f"Crack phase relaxation: f{omega_bar[0]}")
             # Check error (L2)
             error = np.max(alpha.vector[:] - alpha_old.vector[:])
-            # L2_error = fem.form(
-            #     ufl.inner(alpha - alpha_old, alpha - alpha_old) * self.dx
-            # )
-            # error_L2 = np.sqrt(fem.assemble_scalar(L2_error))
             # Update alpha_old
             alpha.vector.copy(alpha_old.vector)
             # Display information
