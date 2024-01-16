@@ -2,6 +2,7 @@ import time
 
 from petsc4py import PETSc
 from mpi4py import MPI
+import numpy as np
 
 from dolfinx import fem
 from dolfinx.fem.petsc import LinearProblem
