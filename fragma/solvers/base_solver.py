@@ -1,9 +1,12 @@
-from pathlib import Path
 import json
 
 from mpi4py import MPI
 
 from dolfinx import io, fem, default_scalar_type
+
+# TODO Remove unused imports
+from exporter import VTKExporter, XDMFExporter, VTXExporter
+from postprocess import PostProcessor
 
 
 class BaseSolver:
@@ -20,8 +23,13 @@ class BaseSolver:
         self.define_state_variables()
         # Define problems
         self.define_problems()
-        # Start export
-        self.init_export()
+        # Initialize post-processing
+        self.postprocessor = PostProcessor(self.domain, self.model, self.state)
+        # Initialize the exporter
+        functions_to_export = list(self.state.values()) + list(
+            self.postprocessor.funcs.values()
+        )
+        self.exporter = VTKExporter(self.domain, functions_to_export)
 
     def define_domain(self):
         print("\n████ DEFINITION OF THE DOMAIN")
@@ -94,7 +102,6 @@ class BaseSolver:
             with load_func.vector.localForm() as bc_local:
                 bc_local.set(default_scalar_type(t * u_incs[facet_name]))
 
-
     def define_problems(self):
         raise NotImplementedError(
             "Solver: The method 'define_problems' must be implemented in the child class."
@@ -111,34 +118,14 @@ class BaseSolver:
             self.update_displacement_boundary_conditions(t)
             # Solve the problems for this iteration
             self.solve_iteration()
+            # Apply post processing
+            self.postprocessor.postprocess()
             # Export the results
-            self.export_state(t)
+            self.exporter.export(t)
         # End export
-        self.end_export()
+        self.exporter.end_export()
 
     def solve_iteration(self):
         raise NotImplementedError(
             "Solver: The method 'solve_iteration' must be implemented in the child class."
         )
-
-    def init_export(self):
-        # Create the export directory
-        results_folder = Path("results")
-        results_folder.mkdir(exist_ok=True, parents=True)
-        # Set the name of the exported file
-        filename = results_folder / "results"
-        # Open the file
-        self.xdmf_file = io.XDMFFile(
-            self.domain.comm, filename.with_suffix(".xdmf"), "w"
-        )
-        # Export the mesh
-        self.xdmf_file.write_mesh(self.domain)
-
-    def export_state(self, t):
-        # Export displacement file
-        for state_field in self.state.values():
-            self.xdmf_file.write_function(state_field, t)
-
-    def end_export(self):
-        # Close the file
-        self.xdmf_file.close()

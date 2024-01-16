@@ -3,11 +3,11 @@ import numpy as np
 from dolfinx import fem, default_scalar_type
 import ufl
 
-class BaseModel():
 
+class BaseModel:
     def __init__(self, pars):
         # Get elastic parameters
-        E =  pars["mechanical"]["E"]
+        E = pars["mechanical"]["E"]
         nu = pars["mechanical"]["nu"]
         # Compute Lame coefficient
         self.la = E * nu / ((1 + nu) * (1 - 2 * nu))
@@ -24,14 +24,16 @@ class BaseModel():
                 case _:
                     raise ValueError(f'The 2D assumption "{assumption}" in unknown')
 
-    def eps(self, u):
-        return ufl.sym(ufl.grad(u))
+    def eps(self, state):
+        return ufl.sym(ufl.grad(state["u"]))
 
-    def sig(self, u):
+    def sig(self, state):
         # Get elastic parameters
         mu, la = self.mu, self.la
+        # Get the state variables
+        u = state["u"]
         # Compute the stess
-        return la * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2.0 * mu * self.eps(u)
+        return la * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2.0 * mu * self.eps(state)
 
     def energy(self, state, domain):
         raise NotImplementedError(
@@ -40,7 +42,7 @@ class BaseModel():
 
 
 class ElasticModel(BaseModel):
-    """ TODO """
+    """TODO"""
 
     def __init__(self, pars):
         # Initialise parent class
@@ -59,14 +61,14 @@ class ElasticModel(BaseModel):
         # Get state variables
         u = state["u"]
         # Define the energy terms
-        elastic_energy = 0.5 * ufl.inner(self.sig(u), self.eps(u)) * dx
+        elastic_energy = 0.5 * ufl.inner(self.sig(state), self.eps(state)) * dx
         external_work = ufl.dot(f, u) * dx + ufl.dot(T, u) * ds
         # Define the total energy
         return elastic_energy - external_work
 
 
 class FractureModel(BaseModel):
-    """ TODO """
+    """TODO"""
 
     def __init__(self, pars):
         # Initialise parent class
@@ -77,7 +79,9 @@ class FractureModel(BaseModel):
         self.Gc = pars["mechanical"]["Gc"]
         self.ell = pars["mechanical"]["ell"]
         self.aG = pars["mechanical"]["aG"] if "aG" in pars["mechanical"] else 0
-        self.theta_0 = pars["mechanical"]["theta_0"] if "theta_0" in pars["mechanical"] else 0
+        self.theta_0 = (
+            pars["mechanical"]["theta_0"] if "theta_0" in pars["mechanical"] else 0
+        )
         # Get the residual crack phase
         self.alpha_res = pars["numerical"]["alpha_res"]
 
@@ -118,12 +122,14 @@ class FractureModel(BaseModel):
                     f"The degradation model named '{self.deg_model}' does not exists."
                 )
 
-    def sig(self, u, alpha):
+    def sig(self, state):
         # Get the elastic parameters
         mu, la = self.mu, self.la
+        # Get the state variables
+        u, alpha = state["u"], state["alpha"]
         # Compute the stess
         return self.a(alpha) * (
-            la * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2.0 * mu * self.eps(u)
+            la * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2.0 * mu * self.eps(state)
         )
 
     def energy(self, state, domain):
@@ -146,15 +152,21 @@ class FractureModel(BaseModel):
         A_np = np.eye(dim)
         if aG != 0:
             A_np += aG * np.array(
-                    [[np.cos(2*theta_0), np.sin(2*theta_0)],
-                     [np.sin(2*theta_0), -np.cos(2*theta_0)]])
+                [
+                    [np.cos(2 * theta_0), np.sin(2 * theta_0)],
+                    [np.sin(2 * theta_0), -np.cos(2 * theta_0)],
+                ]
+            )
         A = fem.Constant(domain, A_np)
         # Define the energy terms
-        elastic_energy = 0.5 * ufl.inner(self.sig(u, alpha), self.eps(u)) * dx
+        elastic_energy = 0.5 * ufl.inner(self.sig(state), self.eps(state)) * dx
         dissipated_energy = (
             Gc
             / cw
-            * (self.w(alpha) / ell + ell * ufl.dot(ufl.grad(alpha), A*ufl.grad(alpha)))
+            * (
+                self.w(alpha) / ell
+                + ell * ufl.dot(ufl.grad(alpha), A * ufl.grad(alpha))
+            )
             * dx
         )
         external_work = ufl.dot(f, u) * dx + ufl.dot(T, u) * ds
