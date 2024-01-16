@@ -23,7 +23,6 @@ class FractureSolver(BaseSolver):
         # Initialise parent class
         super().__init__(pars)
 
-
     def define_state_variables(self):
         ### Variational formulation
         print("\n████ DEFINITION OF THE STATE VARIABLES")
@@ -156,10 +155,6 @@ class FractureSolver(BaseSolver):
         with self.alpha_ub.vector.localForm() as alpha_ub_local:
             alpha_ub_local.set(1.0)
         fem.set_bc(self.alpha_ub.vector, self.bcs_alpha)
-        # TODO Remove this
-        # Add the bounds to state in order to export them
-        self.state["alpha_lb"] = self.alpha_lb
-        self.state["alpha_ub"] = self.alpha_ub
         # Set the crack phrase boundary bound (Note: they are passed as reference and not as values)
         self.problem_alpha.setVariableBounds(self.alpha_lb.vector, self.alpha_ub.vector)
 
