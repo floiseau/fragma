@@ -4,12 +4,12 @@ from dolfinx import fem
 from dolfinx.fem.petsc import LinearProblem
 import ufl
 
-from solvers.base_solver import BaseSolver
+from problems.base_problem import BaseProblem
 from models import ElasticModel
 from utils.build_nullspace import build_elasticity_nullspace
 
 
-class ElasticitySolver(BaseSolver):
+class ElasticityProblem(BaseProblem):
     """
     Solver for 2D elasticity problem (in plane strain or plain stress).
     The loading are proportional to time.

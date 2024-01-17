@@ -11,7 +11,7 @@ from exporter import (
 from postprocess import PostProcessor
 
 
-class BaseSolver:
+class BaseProblem:
     def __init__(self, pars):
         ### Parameters
         print("\n████ PARAMETERS")

@@ -17,8 +17,7 @@ class Domain:
 
     def __locate_physical_groups(self, facets_tags_values):
         # Get the facets indices
-        self.boundary_facets = {}
-        for facet_name, facet_value in facets_tags_values.items():
-            self.boundary_facets[facet_name] = self.facet_tags.indices[
-                self.facet_tags.values == facet_value
-            ]
+        self.boundary_facets = {
+            facet_name: self.facet_tags.indices[self.facet_tags.values == facet_value]
+            for facet_name, facet_value in facets_tags_values.items()
+        }
