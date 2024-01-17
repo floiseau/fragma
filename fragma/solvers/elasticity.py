@@ -25,9 +25,9 @@ class ElasticitySolver(BaseSolver):
         ### Variational formulation
         print("\n████ DEFINITION OF THE STATE VARIABLES")
         # Define the elements
-        element_u = ufl.VectorElement("Lagrange", self.domain.ufl_cell(), 1)
+        element_u = ufl.VectorElement("Lagrange", self.domain.mesh.ufl_cell(), 1)
         # Define finite element spaces
-        self.V_u = fem.FunctionSpace(self.domain, element_u)
+        self.V_u = fem.FunctionSpace(self.domain.mesh, element_u)
         # Define the state variables
         u = fem.Function(self.V_u, name="Displacement")
         # Define the state vector
@@ -40,7 +40,7 @@ class ElasticitySolver(BaseSolver):
         # Get the state variables
         u = self.state["u"]
         # Get the total energy from the model
-        energy = self.model.energy(self.state, self.domain)
+        energy = self.model.energy(self.state, self.domain.mesh)
         # Derivative of the energy with respect to displacement to obtain the linear problem to determine the stationary point
         E_u = ufl.derivative(energy, u, ufl.TestFunction(self.V_u))
         E_du = ufl.replace(E_u, {u: ufl.TrialFunction(self.V_u)})
