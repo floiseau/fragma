@@ -2,12 +2,15 @@ import tomllib
 
 from dolfinx import log
 
-from solvers.elasticity import ElasticitySolver
-from solvers.fracture import FractureSolver
+from problems.elasticity import ElasticityProblem
+from problems.fracture import FractureProblem
 
 # TODO
-#   Fracture
-#       Add weak anisotropy
+#   Cleaning
+#       Transform the current solvers into problems
+#           Problem should manage FEM space, state variables and
+#           Ideally, it should also contain PETScProblem that PETSc can take as input
+#       Create solver classes taking a problem as input and solving it using PETSc interface if possible
 #   Fracture
 #       Implement the staggered path-following approach (based on dissipation or the integral of crack phase)
 #   Post-process
@@ -37,13 +40,13 @@ Author(s):
 with open("parameters.toml", "rb") as toml_file:
     pars = tomllib.load(toml_file)
 
-# Choose the solver
+# Choose the problem
 model = pars["model"]["name"]
 match model:
     case "elasticity":
-        solver = ElasticitySolver(pars)
+        problem = ElasticityProblem(pars)
     case "fracture":
-        solver = FractureSolver(pars)
+        problem = FractureProblem(pars)
     case "fracture_monolithic":
         # solver = FractureMonolithicSolver(pars)
         raise NotImplementedError(f"Model '{model}' is not implemented.")
@@ -54,4 +57,4 @@ match model:
         raise NotImplementedError(f"Model '{model}' is not implemented.")
 
 # Run the solver
-solver.solve()
+problem.solve()

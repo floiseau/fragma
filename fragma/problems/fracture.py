@@ -8,13 +8,13 @@ from dolfinx import fem
 from dolfinx.fem.petsc import LinearProblem
 import ufl
 
-from solvers.base_solver import BaseSolver
+from problems.base_problem import BaseProblem
 from models import FractureModel
 from utils.snes_problem import SNESProblem
 from utils.build_nullspace import build_elasticity_nullspace
 
 
-class FractureSolver(BaseSolver):
+class FractureProblem(BaseProblem):
     """TODO"""
 
     def __init__(self, pars):
