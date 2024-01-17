@@ -35,7 +35,7 @@ class BaseModel:
         # Compute the stess
         return la * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2.0 * mu * self.eps(state)
 
-    def energy(self, state, domain):
+    def energy(self, state, mesh):
         raise NotImplementedError(
             "Model: The method 'energy' must be implemented in the child class."
         )

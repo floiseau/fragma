@@ -1,11 +1,13 @@
 import json
 
-from mpi4py import MPI
+from dolfinx import fem, default_scalar_type
 
-from dolfinx import io, fem, default_scalar_type
-
-# TODO Remove unused imports
-from exporter import VTKExporter, XDMFExporter, VTXExporter
+from domain import Domain
+from exporter import (
+    VTKExporter,
+    XDMFExporter,
+    VTXExporter,
+)  # TODO Remove unused imports
 from postprocess import PostProcessor
 
 
@@ -18,7 +20,7 @@ class BaseSolver:
         # Display a summary
         print(json.dumps(self.pars, indent=4))
         # Define the domain
-        self.domain, cell_tags, self.facet_tags = self.define_domain()
+        self.domain = Domain(pars["mesh"], pars["model"]["dim"])
         # Define the state variables
         self.define_state_variables()
         # Define problems
@@ -29,16 +31,7 @@ class BaseSolver:
         functions_to_export = list(self.state.values()) + list(
             self.postprocessor.funcs.values()
         )
-        self.exporter = VTKExporter(self.domain, functions_to_export)
-
-    def define_domain(self):
-        print("\n████ DEFINITION OF THE DOMAIN")
-        # Get the dimension
-        dim = self.pars["model"]["dim"]
-        # Read the mesh from GMSH
-        msh_file = self.pars["mesh"]["msh_file"]
-        print("Mesh reading output:")
-        return io.gmshio.read_from_msh(msh_file, MPI.COMM_WORLD, gdim=dim)
+        self.exporter = VTKExporter(self.domain.mesh, functions_to_export)
 
     def define_state_variables(self):
         raise NotImplementedError(
@@ -46,22 +39,13 @@ class BaseSolver:
         )
 
     def define_displacement_boundary_condition_functions(self):
-        ### Locate Boundary
-        print("\n████ LOCATE BOUNDARIES")
-        # Get the physical groups (mapping between pg and their indices)
-        facets_tags_values = self.pars["mesh"]["physical_groups"]
-        # Get the facets indices
-        boundary_facets = {}
-        for facet_name, facet_value in facets_tags_values.items():
-            boundary_facets[facet_name] = self.facet_tags.indices[
-                self.facet_tags.values == facet_value
-            ]
         # Get the dimensions of domain and facets
-        dim = self.domain.geometry.dim
-        fdim = self.domain.geometry.dim - 1
-
+        dim = self.domain.mesh.geometry.dim
+        fdim = self.domain.mesh.geometry.dim - 1
+        # Get boundary facets
+        boundary_facets = self.domain.boundary_facets
         # Get boundary dofs (per comp)
-        boundaries = {
+        boundary_dofs = {
             f"{facet_name}_{comp}": fem.locate_dofs_topological(
                 (self.V_u.sub(comp), self.V_u.sub(comp).collapse()[0]),
                 fdim,
@@ -89,7 +73,7 @@ class BaseSolver:
             # Add the boundary conditions to the list
             self.bcs_u.append(
                 fem.dirichletbc(
-                    self.load_funcs[facet_name], boundaries[facet_name], self.V_u
+                    self.load_funcs[facet_name], boundary_dofs[facet_name], self.V_u
                 )
             )
 

@@ -27,12 +27,14 @@ class FractureSolver(BaseSolver):
         ### Variational formulation
         print("\n████ DEFINITION OF THE STATE VARIABLES")
         # Define the displacement field
-        element_u = ufl.VectorElement("Lagrange", self.domain.ufl_cell(), degree=1)
-        self.V_u = fem.FunctionSpace(self.domain, element_u)
+        element_u = ufl.VectorElement("Lagrange", self.domain.mesh.ufl_cell(), degree=1)
+        self.V_u = fem.FunctionSpace(self.domain.mesh, element_u)
         u = fem.Function(self.V_u, name="Displacement")
         # Define the fracture phase field
-        element_alpha = ufl.FiniteElement("Lagrange", self.domain.ufl_cell(), degree=1)
-        self.V_alpha = fem.FunctionSpace(self.domain, element_alpha)
+        element_alpha = ufl.FiniteElement(
+            "Lagrange", self.domain.mesh.ufl_cell(), degree=1
+        )
+        self.V_alpha = fem.FunctionSpace(self.domain.mesh, element_alpha)
         alpha = fem.Function(self.V_alpha, name="CrackPhase")
         # Define the state vector
         self.state = {"u": u, "alpha": alpha}
@@ -44,7 +46,7 @@ class FractureSolver(BaseSolver):
         # Get the state variables
         u = self.state["u"]
         # Define the energy
-        energy = self.model.energy(self.state, self.domain)
+        energy = self.model.energy(self.state, self.domain.mesh)
         # Derivative of the energy with respect to displacement to obtain the linear problem to determine the stationary point
         E_u = ufl.derivative(energy, u, ufl.TestFunction(self.V_u))
         E_du = ufl.replace(E_u, {u: ufl.TrialFunction(self.V_u)})
@@ -79,17 +81,11 @@ class FractureSolver(BaseSolver):
     def define_crack_phase_boundary_condition_functions(self):
         # Add the damage boundary conditions if there is an initial crack
         if "crack" in self.pars["mesh"]["physical_groups"]:
-            # Get the physical groups (mapping between pg and their indices)
-            facets_tags_values = self.pars["mesh"]["physical_groups"]
-            # Get the facets indices
-            boundary_facets = {}
-            for facet_name, facet_value in facets_tags_values.items():
-                boundary_facets[facet_name] = self.facet_tags.indices[
-                    self.facet_tags.values == facet_value
-                ]
             # Get the dimensions of domain and facets
-            dim = self.domain.geometry.dim
-            fdim = self.domain.geometry.dim - 1
+            dim = self.domain.mesh.geometry.dim
+            fdim = self.domain.mesh.geometry.dim - 1
+            # Get boundary facets
+            boundary_facets = self.domain.boundary_facets
             # Get boundary dofs (per comp)
             boundaries = {
                 f"{facet_name}": fem.locate_dofs_topological(
@@ -119,7 +115,7 @@ class FractureSolver(BaseSolver):
         # Get the state variables
         u, alpha = self.state["u"], self.state["alpha"]
         # Define the energy
-        energy = self.model.energy(self.state, self.domain)
+        energy = self.model.energy(self.state, self.domain.mesh)
         # Derivative of the energy with respect to crack phase
         E_alpha = ufl.derivative(energy, alpha, ufl.TestFunction(self.V_alpha))
         E_alpha_alpha = ufl.derivative(E_alpha, alpha, ufl.TrialFunction(self.V_alpha))
