@@ -1,11 +1,7 @@
 import json
 
 from domain import Domain
-from exporter import (
-    VTKExporter,
-    XDMFExporter,
-    VTXExporter,
-)  # TODO Remove unused imports
+from exporter import Exporter
 from postprocess import PostProcessor
 
 
@@ -25,12 +21,16 @@ class BaseProblem:
         self.subproblems = {}
         self.define_subproblems()
         # Initialize post-processing
-        self.postprocessor = PostProcessor(self.domain, self.model, self.state)
+        postprocess_pars = pars.get("postprocess", {})
+        self.postprocessor = PostProcessor(
+            self.domain, self.model, self.state, postprocess_pars
+        )
         # Initialize the exporter
         functions_to_export = list(self.state.values()) + list(
             self.postprocessor.funcs.values()
         )
-        self.exporter = VTKExporter(self.domain.mesh, functions_to_export)
+        probes = self.postprocessor.probes
+        self.exporter = Exporter(self.domain.mesh, functions_to_export, probes)
 
     def define_state_variables(self):
         raise NotImplementedError(
@@ -62,7 +62,7 @@ class BaseProblem:
             # Export the results
             self.exporter.export(t)
         # End export
-        self.exporter.end_export()
+        self.exporter.end()
 
     def solve_iteration(self):
         raise NotImplementedError(

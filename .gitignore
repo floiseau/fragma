@@ -1,6 +1,10 @@
 # Result files
 *.xdmf
 *.h5
+*.pvtu
+*.vtu
+*.vtk
+*.csv
 
 # GMSH files
 *.msh
