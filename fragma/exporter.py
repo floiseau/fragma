@@ -1,71 +1,36 @@
+import csv
 from pathlib import Path
 
 from dolfinx import io
 
+class Exporter:
 
-class XDMFExporter:
-    def __init__(self, mesh, functions_to_export):
+    def __init__(self, mesh, functions_to_export, probes):
         # Create the export directory
         results_folder = Path("results")
         results_folder.mkdir(exist_ok=True, parents=True)
-        # Set the name of the exported file
-        filename = results_folder / "results"
-        # Store the functions to export
-        self.functions_to_export = functions_to_export
-        # Open the file
-        self.file = io.XDMFFile(mesh.comm, filename.with_suffix(".xdmf"), "w")
-        # Export the mesh
-        self.file.write_mesh(mesh)
+        # Create the VTKFieldExporter
+        self.field_exporter = VTKFieldExporter(mesh, functions_to_export, results_folder)
+        # Create the probe exporter
+        self.probe_exporter = ProbeExporter(probes, results_folder)
+
 
     def export(self, t):
-        for function in self.functions_to_export:
-            self.file.write_function(function, t)
+        # Run the field exporter
+        self.field_exporter.export(t)
+        # Run the probe exporter
+        self.probe_exporter.export(t)
 
-    def end_export(self):
-        # Close the file
-        self.file.close()
-
-
-class VTXExporter:
-    """Export the results in VTX format.
-
-    WARNING: This does not work in dolfinx 0.7.2.
-    """
-
-    def __init__(self, mesh, functions_to_export):
-        # Create the export directory
-        results_folder = Path("results")
-        results_folder.mkdir(exist_ok=True, parents=True)
-        # Store the functions to export
-        self.functions_to_export = functions_to_export
-        # Open the file
-        self.files = []
-        for function in functions_to_export:
-            # Create file name
-            file_name = results_folder / function.name
-            # Create the VTX file
-            new_file = io.VTXWriter(
-                mesh.comm, file_name.with_suffix(".bp"), [function], engine="BP4"
-            )
-            # Add the new file to the file list
-            self.files.append(new_file)
-
-    def export(self, t):
-        for file in self.files:
-            file.write(t)
-
-    def end_export(self):
-        # Close the file
-        for file in self.files:
-            file.close()
+    def end(self):
+        # End the probe exporter
+        self.probe_exporter.end()
+        # End the field exporter
+        self.field_exporter.end()
 
 
-class VTKExporter:
-    def __init__(self, mesh, functions_to_export):
+class VTKFieldExporter:
+    def __init__(self, mesh, functions_to_export, results_folder: Path):
         print("Warning: Using VTK exporter. This exporter might be slow.")
-        # Create the export directory
-        results_folder = Path("results")
-        results_folder.mkdir(exist_ok=True, parents=True)
         # Store the functions to export
         self.functions_to_export = functions_to_export
         # Generate the files
@@ -86,7 +51,41 @@ class VTKExporter:
             # Write the function into the file
             file.write_function(function, t)
 
-    def end_export(self):
+    def end(self):
         # Close the file
         for file in self.files:
             file.close()
+
+class ProbeExporter:
+    def __init__(self, probes, results_folder: Path):
+        # Store the probes
+        self.probes = probes
+        # Generate the CSV file
+        self.csv_file = open(results_folder/"probes.csv", "w") 
+        # Create the csv writer
+        self.writer = csv.writer(self.csv_file)
+        # Write the header
+        header = []
+        for func_name, probe in probes.items():
+            # Iterate through the probes of the function
+            for i, x in enumerate(probe.xs):
+                for comp, val in enumerate(probe.vals[i]):
+                    # Set the name of the row
+                    header.append(f"{func_name} {comp+1} {x}")
+        # Write the header
+        self.writer.writerow(header)
+
+    def export(self, t: float):
+        # Write the header
+        row = []
+        for func_name, probe in self.probes.items():
+            # Iterate through the probes of the function
+            for i, _ in enumerate(probe.xs):
+                for val in probe.vals[i]:
+                    # Add the value to the row
+                    row.append(val)
+        # Write the row
+        self.writer.writerow(row)
+
+    def end(self):
+        self.csv_file.close()
