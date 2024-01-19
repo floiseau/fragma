@@ -17,7 +17,6 @@ class PostProcessor:
         # Initialize probes dict
         self.__initialize_probes(domain.mesh, state, postprocess_pars)
 
-
     def __initialize_strain(self, mesh, model, state):
         # Compute the strain from ufl
         eps_ufl = model.eps(state)
@@ -57,8 +56,9 @@ class PostProcessor:
         # Create the displacement probes
         if displacement_probes_pos is not None:
             print("Generate the displacement probes")
-            self.probes["displacement"] = Probes(state["u"], displacement_probes_pos, mesh)
-
+            self.probes["displacement"] = Probes(
+                state["u"], displacement_probes_pos, mesh
+            )
 
     def postprocess(self):
         """Update the post-processed quantities.
@@ -71,6 +71,7 @@ class PostProcessor:
         # Update the displacement probes values
         for probe in self.probes.values():
             probe.update()
+
 
 class Probes:
     """Probes to evaluate func at the points xs."""
@@ -105,16 +106,17 @@ class Probes:
     def update(self):
         self.vals = self.func.eval(self.xs, self.cells)
 
+
 # NOTE: the following class is working but likely to be less efficient than Probes.
 # class Probe:
 #     """Probe to evaluate func at the point x."""
-# 
+#
 #     def __init__(self, func, x, mesh):
 #         """Initialize a displacement probe.
-# 
+#
 #         This method is based on: https://jsdokken.com/dolfinx-tutorial/chapter1/membrane_code.html?#making-curve-plots-throughout-the-domain.
 #         Note that this source also contains the modifications for the parallel version.
-# 
+#
 #         Input:
 #             func: Function to probe
 #             x: Position of the probe
@@ -131,7 +133,7 @@ class Probes:
 #         self.cell = geometry.compute_colliding_cells(mesh, cell_candidates, x)[0]
 #         # Initialize the value
 #         self.val = 0
-# 
+#
 #     def update(self):
 #         self.val = self.func.eval([self.x], [self.cell])
 #         print(self.val)
