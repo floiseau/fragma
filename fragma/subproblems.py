@@ -1,3 +1,4 @@
+import numpy as np
 from petsc4py import PETSc
 
 from dolfinx import fem, default_scalar_type
@@ -12,10 +13,45 @@ class DisplacementSubProblem:
     def __init__(self, pars, domain, state, model):
         # Store the displacement increments
         self.u_incs = pars["loading"]["u_incs"]
-        # Define the boundary conditions functions
-        bcs_u = self.define_boundary_condition_functions(domain, state)
+        # Initialize the boundary conditions
+        bcs_u = self.initialize_boundary_conditions(pars, domain, state)
         # Define the linear problem
         self.define_problem(domain, state, model, bcs_u)
+
+    def initialize_boundary_conditions(self, pars, domain, state):
+        bcs_u = []
+        # Define a lock point
+        bcs_u += self.define_lock_point(pars, domain, state)
+        # Define the boundary conditions functions
+        bcs_u += self.define_boundary_condition_functions(domain, state)
+        # Return the boundary conditions
+        return bcs_u
+
+    def define_lock_point(self, pars, domain, state):
+        # Get the position of the point
+        x0 = pars.get("loading", {}).get("lock_point", None)
+        # Return if there is not lock point
+        if x0 is None:
+            return []
+        # Get the state variable
+        u = state["u"]
+        # Get the function space of the state variable
+        V_u = u.function_space
+
+        # Generate the location function
+        def lock_point(x):
+            return (
+                np.isclose(x[0], x0[0])
+                & np.isclose(x[1], x0[1])
+                & np.isclose(x[2], x0[2])
+            )
+
+        # Generate the zero displacement vector
+        u_zero = np.array((0,) * domain.mesh.geometry.dim, dtype=default_scalar_type)
+        # Locate the dof
+        dofs = fem.locate_dofs_geometrical(V_u, lock_point)
+        # Generate the Dirichlet boundary condition
+        return [fem.dirichletbc(u_zero, dofs, V_u)]
 
     def define_boundary_condition_functions(self, domain, state):
         print("\n████ DEFINITION OF THE DISPLACEMENT BOUNDARY CONDITIONS")

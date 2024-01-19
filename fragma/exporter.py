@@ -3,17 +3,18 @@ from pathlib import Path
 
 from dolfinx import io
 
-class Exporter:
 
+class Exporter:
     def __init__(self, mesh, functions_to_export, probes):
         # Create the export directory
         results_folder = Path("results")
         results_folder.mkdir(exist_ok=True, parents=True)
         # Create the VTKFieldExporter
-        self.field_exporter = VTKFieldExporter(mesh, functions_to_export, results_folder)
+        self.field_exporter = VTKFieldExporter(
+            mesh, functions_to_export, results_folder
+        )
         # Create the probe exporter
         self.probe_exporter = ProbeExporter(probes, results_folder)
-
 
     def export(self, t):
         # Run the field exporter
@@ -56,12 +57,13 @@ class VTKFieldExporter:
         for file in self.files:
             file.close()
 
+
 class ProbeExporter:
     def __init__(self, probes, results_folder: Path):
         # Store the probes
         self.probes = probes
         # Generate the CSV file
-        self.csv_file = open(results_folder/"probes.csv", "w") 
+        self.csv_file = open(results_folder / "probes.csv", "w")
         # Create the csv writer
         self.writer = csv.writer(self.csv_file)
         # Write the header
