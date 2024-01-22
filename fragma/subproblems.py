@@ -261,3 +261,43 @@ class CrackPhaseSubProblem:
 
     def solve(self):
         self.problem_alpha.solve(None, self.alpha.vector)
+
+
+class CrackPhaseSubProblemMiehe(CrackPhaseSubProblem):
+
+    def define_problem(self, domain, state, model, bcs_alpha):
+        print("\n████ DEFINITION OF THE CRACK PHASE PROBLEM")
+        # Get the state variables
+        alpha = state["alpha"]
+        # Store the state variable
+        self.alpha = alpha
+        # Get the function spaces
+        V_alpha = alpha.function_space
+        # Define the energy
+        energy = model.energy(state, domain.mesh)
+        # Derivative of the energy with respect to crack phase
+        E_alpha = ufl.derivative(energy, alpha, ufl.TestFunction(V_alpha))
+        E_dalpha = ufl.replace(E_alpha, {alpha: ufl.TrialFunction(V_alpha)})
+        # Define the displacement problem
+        problem_alpha = LinearProblem(
+            a=ufl.lhs(E_dalpha),
+            L=ufl.rhs(E_dalpha),
+            bcs=bcs_alpha,
+            u=alpha,
+            petsc_options={
+                "ksp_type": "preonly",
+                "pc_type": "lu",
+                "pc_factor_solver_type": "mumps",
+            },
+        )
+        # Display information about the displacement solver
+        problem_alpha.solver.view()
+        # Store the problem
+        self.problem_alpha = problem_alpha
+
+    def update(self, t: float):
+        # Update of boundary conditions ?
+        self.update_boundary_conditions(t)
+
+    def solve(self):
+        self.problem_alpha.solve()
