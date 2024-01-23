@@ -264,7 +264,6 @@ class CrackPhaseSubProblem:
 
 
 class CrackPhaseSubProblemMiehe(CrackPhaseSubProblem):
-
     def define_problem(self, domain, state, model, bcs_alpha):
         print("\n████ DEFINITION OF THE CRACK PHASE PROBLEM")
         # Get the state variables
@@ -285,10 +284,19 @@ class CrackPhaseSubProblemMiehe(CrackPhaseSubProblem):
             bcs=bcs_alpha,
             u=alpha,
             petsc_options={
-                "ksp_type": "preonly",
-                "pc_type": "lu",
-                "pc_factor_solver_type": "mumps",
+                "ksp_type": "cg",
+                "ksp_rtol": 1e-8,
+                "ksp_atol": 1e-10,
+                "ksp_max_it": 1000,
+                "pc_type": "gamg",
+                "pc_gamg_agg_nsmooths": 1,
+                "pc_gamg_esteig_ksp_type": "cg",
             },
+            # petsc_options={
+            #     "ksp_type": "preonly",
+            #     "pc_type": "lu",
+            #     "pc_factor_solver_type": "mumps",
+            # },
         )
         # Display information about the displacement solver
         problem_alpha.solver.view()

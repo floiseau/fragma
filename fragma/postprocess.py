@@ -100,7 +100,6 @@ class Probes:
         # Initialize the values
         self.vals = []
         # Initialize the probes values
-        # TODO CHECK IF THIS WORK
         self.update()
 
     def update(self):

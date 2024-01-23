@@ -166,10 +166,42 @@ class FractureModel(BaseModel):
         # Define the total energy
         return elastic_energy + dissipated_energy - external_work
 
+
 class FractureModelMiehe(FractureModel):
     """Model associated to the solver of Miehe et at. (2010).
 
-    The only different the FractureModel is the introduction of the history field and its impact on the energy."""
+    The only different the FractureModel is the introduction of the history field and its impact on the energy.
+    """
+
+    def update_history(self, state):
+        # Get the state variable
+        u, H = state["u"], state["H"]
+        # Get the dim
+        D = len(u)
+
+        ### Compute Phi0
+        # Get the elastic paramaters
+        mu, la = self.mu, self.la
+        # Get the function space of H
+        V_H = H.function_space
+        # Compute eps
+        eps = ufl.sym(ufl.grad(state["u"]))
+        # Compute its hydrostatic and deviatoric parts
+        tr_eps = ufl.inner(eps, ufl.Identity(D))
+        eps_dev = eps - 1 / D * tr_eps * ufl.Identity(D)
+        # Compute Phi0
+        # WARNING: Is the positive part of tr_eps necessary ????
+        Phi0_ufl = (
+            1 / 2 * ((la + 2 * mu / D) * tr_eps**2 + mu * ufl.inner(eps_dev, eps_dev))
+        )
+        # Generate the FEM expression
+        Phi0_expr = fem.Expression(Phi0_ufl, V_H.element.interpolation_points())
+        # Generate the function and interpolate it
+        Phi0 = fem.Function(V_H)
+        Phi0.interpolate(Phi0_expr)
+        # Compute H
+        H.vector[:] = np.maximum(Phi0.vector[:], H.vector[:])
+        H.vector.assemble()
 
     def energy(self, state, domain):
         # Get the dimension of the domain
@@ -206,9 +238,8 @@ class FractureModelMiehe(FractureModel):
                 self.w(alpha) / ell
                 + ell * ufl.dot(ufl.grad(alpha), A * ufl.grad(alpha))
             )
-            * dx
-            - (1.0-alpha)**2*H*dx
-        )
+            - H * (default_scalar_type(1.0) - alpha) ** 2
+        ) * dx
         external_work = ufl.dot(f, u) * dx + ufl.dot(T, u) * ds
         # Define the total energy
         return elastic_energy + dissipated_energy - external_work
