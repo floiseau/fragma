@@ -60,8 +60,7 @@ class FractureProblem(BaseProblem):
         u, alpha = self.state["u"], self.state["alpha"]
         # Define alpha at previous iteration for irreversibility
         alpha_old = fem.Function(alpha.function_space)
-        with alpha_old.vector.localForm() as alpha_old_local:
-            alpha_old_local.set(0.0)
+        alpha.vector.copy(alpha_old.vector)
         # Get previous displacement (for over-relaxation)
         relaxation = "omega" in self.pars["numerical"]
         if relaxation:

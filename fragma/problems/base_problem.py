@@ -1,6 +1,7 @@
 import json
 
 from domain import Domain
+from timestepper import ProportionalTimeStepper
 from exporter import Exporter
 from postprocess import PostProcessor
 
@@ -20,6 +21,9 @@ class BaseProblem:
         # Define subproblems
         self.subproblems = {}
         self.define_subproblems()
+        # Initialize the time stepper
+        dt = self.pars["loading"]["dt"]
+        self.time_stepper = ProportionalTimeStepper(dt)
         # Initialize post-processing
         postprocess_pars = pars.get("postprocess", {})
         self.postprocessor = PostProcessor(
@@ -48,11 +52,11 @@ class BaseProblem:
 
     def solve(self):
         print("\n████ RESOLUTION")
-        # Start the loading iterations
-        t_max = self.pars["loading"]["t_max"]
-        for t in range(t_max + 1):
+        while self.time_stepper.t < 1:
+            # Get time
+            t = self.time_stepper.t
             # Display information
-            print(f"== Load step {t}/{t_max}")
+            print(f"== Time {t:.8g}")
             # Update subproblems
             self.update_subproblems(t)
             # Solve the problems for this iteration
@@ -61,6 +65,8 @@ class BaseProblem:
             self.postprocessor.postprocess()
             # Export the results
             self.exporter.export(t)
+            # Increment the time stepper
+            self.time_stepper.increment()
         # End export
         self.exporter.end()
 
