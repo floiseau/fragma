@@ -5,6 +5,7 @@ from dolfinx import log
 from problems.elasticity import ElasticityProblem
 from problems.fracture import FractureProblem
 from problems.fracture_Miehe import FractureProblemMiehe
+from problems.fracture_path_following import FractureProblemPathFollowing
 
 # TODO
 #   Cleaning
@@ -50,11 +51,10 @@ match model:
         problem = FractureProblem(pars)
     case "fracture_Miehe":
         problem = FractureProblemMiehe(pars)
+    case "fracture_path_following":
+        problem = FractureProblemPathFollowing(pars)
     case "fracture_monolithic":
         # solver = FractureMonolithicSolver(pars)
-        raise NotImplementedError(f"Model '{model}' is not implemented.")
-    case "fracture_path_following":
-        # solver = FracturePathFollowingSolver(pars)
         raise NotImplementedError(f"Model '{model}' is not implemented.")
     case _:
         raise NotImplementedError(f"Model '{model}' is not implemented.")

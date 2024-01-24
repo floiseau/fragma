@@ -58,7 +58,7 @@ class FractureProblem(BaseProblem):
     def solve_iteration(self):
         # Get the state
         u, alpha = self.state["u"], self.state["alpha"]
-        # Define alpha at previous iteration for irreversibility
+        # Define alpha at previous iteration for error computation
         alpha_old = fem.Function(alpha.function_space)
         alpha.vector.copy(alpha_old.vector)
         # Get previous displacement (for over-relaxation)
