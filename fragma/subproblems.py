@@ -12,7 +12,7 @@ from utils.snes_problem import SNESProblem
 class DisplacementSubProblem:
     def __init__(self, pars, domain, state, model):
         # Store the displacement increments
-        self.u_incs = pars["loading"]["u_incs"]
+        self.u_imp_max = pars["loading"]["u_imp_max"]
         # Initialize the boundary conditions
         bcs_u = self.initialize_boundary_conditions(pars, domain, state)
         # Define the linear problem
@@ -80,7 +80,7 @@ class DisplacementSubProblem:
         bcs_u = []
         self.load_funcs = {}
         # Iterage through the displacement increments
-        for facet_name, u_inc in self.u_incs.items():
+        for facet_name, u_inc in self.u_imp_max.items():
             # Get the component number
             comp = int(facet_name.split("_")[-1])
             # Define an FEM function (to control the BC)
@@ -100,9 +100,9 @@ class DisplacementSubProblem:
         print("Update displacement boundary conditions")
         # Iterate through the load functions
         for facet_name, load_func in self.load_funcs.items():
-            # Increment the load function
+            # Update the load function
             with load_func.vector.localForm() as bc_local:
-                bc_local.set(default_scalar_type(t * self.u_incs[facet_name]))
+                bc_local.set(default_scalar_type(t * self.u_imp_max[facet_name]))
 
     def define_problem(self, domain, state, model, bcs_u):
         print("\n████ DEFINITION OF THE DISPLACEMENT PROBLEM")
