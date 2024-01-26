@@ -15,7 +15,7 @@ a  = DefineNumber[  0.5*L, Name "Parameters/a" ];
 g  = DefineNumber[  0.1*L, Name "Parameters/g" ];
 nw = DefineNumber[  1e-16, Name "Parameters/nw" ];
 // Numerical
-lc = DefineNumber[ 0.05e-3, Name "Parameters/lc" ];
+lc = DefineNumber[ 0.2e-3, Name "Parameters/lc" ];
 
 ////
 // Points
@@ -29,8 +29,6 @@ Point(5) = { -a,  H/2-g, 0, lc};
 Point(6) = { -a,     nw, 0, lc};
 // Crack tip
 Point(7) = {  0,      0, 0, lc};
-// TODO Upper grip
-// TODO Lower grip
 
 ////
 // Lines
