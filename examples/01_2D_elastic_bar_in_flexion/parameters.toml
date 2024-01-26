@@ -15,13 +15,13 @@ E = 30e9
 nu = 0.3
 
 [loading]
-t_max = 10
+dt = 0.1
 
-[loading.u_incs]
+[loading.u_imp_max]
 left_0 = 0
 left_1 = 0
-right_0 = 0
-right_1 = 1e-3
+right_0 = 0.1
+right_1 = 0
 
 [postprocess]
 # TODO fields = ["strain", "stress"]
