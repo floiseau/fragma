@@ -21,9 +21,6 @@ class BaseProblem:
         # Define subproblems
         self.subproblems = {}
         self.define_subproblems()
-        # Initialize the time stepper
-        dt = self.pars["loading"]["dt"]
-        self.time_stepper = ProportionalTimeStepper(dt)
         # Initialize post-processing
         postprocess_pars = pars.get("postprocess", {})
         self.postprocessor = PostProcessor(
@@ -52,6 +49,8 @@ class BaseProblem:
 
     def solve(self):
         print("\n████ RESOLUTION")
+        # Initialize the time stepper
+        self.time_stepper = ProportionalTimeStepper(self.pars["loading"]["dt"])
         while self.time_stepper.t < 1:
             # Get time
             t = self.time_stepper.t
