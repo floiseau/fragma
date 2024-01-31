@@ -9,10 +9,9 @@ One can apply the following commands to install those modules inside an environm
 ```shell
 $ conda create -n fenicsx-env
 $ conda activate fenicsx-env
-$ conda install -c conda-forge fenics-dolfinx mpich pyvista python-gmsh mpi4py petsc4py
+$ conda install -c conda-forge fenics-dolfinx mpich pyvista python-gmsh mpi4py petsc4py scipy
 ```
-In practice, I used `micromamba` instead of `conda` to manage the environment.
-
+Note that it is recommanded to use [libmamba](https://www.anaconda.com/blog/a-faster-conda-for-a-growing-community) for a faster environment creation.
 
 ## Usage
 In order to run, `fragma` needs a GMSH mesh file and the parameter file (`parameters.toml`).

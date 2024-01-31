@@ -86,6 +86,7 @@ class FractureModel(BaseModel):
         self.alpha_res = pars["numerical"]["alpha_res"]
 
     def a(self, alpha):
+        """Degradation function."""
         # Residual crack phase
         alpha_res = self.alpha_res
         # Compute a
@@ -99,7 +100,21 @@ class FractureModel(BaseModel):
                     f"The degradation model named '{self.deg_model}' does not exists."
                 )
 
+    def ap(self, alpha):
+        """Derivative of the degradation function."""
+        # Compute w
+        match self.deg_model:
+            case "AT1":
+                return -2*(1-alpha)
+            case "AT2":
+                return -2*(1-alpha)
+            case _:
+                raise ValueError(
+                    f"The degradation model named '{self.deg_model}' does not exists."
+                )
+
     def w(self, alpha):
+        """Dissipation function."""
         # Compute w
         match self.deg_model:
             case "AT1":
@@ -111,7 +126,21 @@ class FractureModel(BaseModel):
                     f"The degradation model named '{self.deg_model}' does not exists."
                 )
 
+    def wp(self, alpha):
+        """Derivative of the dissipation function."""
+        # Compute w
+        match self.deg_model:
+            case "AT1":
+                return 1
+            case "AT2":
+                return 2*alpha
+            case _:
+                raise ValueError(
+                    f"The degradation model named '{self.deg_model}' does not exists."
+                )
+
     def cw(self):
+        """Normalization coefficient."""
         match self.deg_model:
             case "AT1":
                 return 8 / 3
@@ -123,6 +152,7 @@ class FractureModel(BaseModel):
                 )
 
     def sig_eff(self, state):
+        """Effective stress (accounts for crack phase influence)."""
         return self.a(state["alpha"]) * self.sig(state)
 
     def energy(self, state, domain):
