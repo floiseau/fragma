@@ -8,28 +8,29 @@ model = "AT1"
 msh_file = "mesh.msh"
 
 [mesh.physical_groups]
-crack = 13
-non-crackable_1 = 14
-non-crackable_2 = 15
-bot_pin = 14
-top_pin = 15
+bot_pin = 22
+top_pin = 23
+crack = 21
+non-crackable_1 = 22
+non-crackable_2 = 23
 
 [numerical]
 atol = 1e-4
 max_iter = 1000
 alpha_res = 1e-12
+# omega = 1.5
 
 [mechanical]
 E = 3e9
 nu = 0.4
 Gc = 380
-ell = 3e-3
+ell = 10e-3
 
 [loading]
-t_max = 50
+dt = 0.004
 
-[loading.u_incs]
+[loading.u_imp_max]
 bot_pin_0 = 0
-bot_pin_1 = -5e-5
+bot_pin_1 = -2.5e-3
 top_pin_0 = 0
-top_pin_1 =  5e-5
+top_pin_1 =  2.5e-3

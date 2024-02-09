@@ -14,9 +14,9 @@ E = 30e9
 nu = 0.3
 
 [loading]
-t_max = 10
+dt = 0.1
 
-[loading.u_incs]
+[loading.u_imp_max]
 bot_0 = 0
 bot_1 = 0
 bot_2 = 0
