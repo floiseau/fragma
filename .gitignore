@@ -4,6 +4,7 @@
 *.pvtu
 *.vtu
 *.vtk
+*.pvd
 *.csv
 
 # GMSH files

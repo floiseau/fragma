@@ -25,7 +25,7 @@ Once both files are provided, different steps are necessary to run it.
 *It is also possible to run* `fragma` *directly in the environment using* `conda run -n fragma python path/to/repo/fragma/main.py` . Also, note that the examples contain a* `run.sh` *file, which generates the mesh and runs* `fragma`*.*
 
 `fragma` will then generate a results directory containing the VTK files.
-The files appearing as `quantity..pvtu` (*e.g.*, `Displacement..pvtu`) can be opened with Paraview to visualize the simulation results.
+The files names `quantity.pvd` (*e.g.*, `Displacement.pvd`) can be opened with Paraview to visualize the simulation results.
 
 *Remark: In some Linux distribution, the environment variable `OMP_NUM_THREADS` is not set, leading FEniCSx solve the same problem on all the available cores. To prevent that, `OMP_NUM_THREADS=1` must be prepended to the command to run `fragma`.*
 
