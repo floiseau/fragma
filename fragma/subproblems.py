@@ -279,6 +279,121 @@ class DisplacementSubProblem:
         self.problem_u.solve()
 
 
+class DisplacementPartitionedSubProblem(DisplacementSubProblem):
+    """Class representing a partitioned subproblem for displacement."""
+
+    def __init__(self, pars, domain, state, model):
+        """
+        Initialize the partitioned displacement subproblem.
+
+        Parameters
+        ----------
+        pars : dict
+            Parameters for the problem.
+        domain : Domain
+            Domain of the problem.
+        state : dict
+            State variables of the problem.
+        model : BaseModel
+            Model defining the problem's behavior.
+        """
+        super().__init__(pars, domain, state, model)
+        # Store the timestep increment (TODO Remove)
+        self.dt = pars["loading"]["dt"]
+
+    def define_problem(self, domain, state, model, bcs_u):
+        """
+        Define the partitioned displacement problem.
+
+        Note: The problem is defined and solved in terms of displacement increments.
+
+        Parameters
+        ----------
+        domain : Domain
+            Domain of the problem.
+        state : dict
+            State variables of the problem.
+        model : BaseModel
+            Model defining the problem's behavior.
+        bcs_u : list
+            List of boundary conditions for displacement.
+        """
+        print("\n████ DEFINITION OF THE PARTITIONED DISPLACEMENT PROBLEM")
+        # Get the state variables
+        u = state["u"]
+        self.u = u
+        # Get the function spaces
+        V_u = u.function_space
+        # Create the previous displacement
+        self.u_km1 = fem.Function(V_u, name="PreviousDisplacement")
+        self.u_km1.x.array[:] = u.x.array[:]
+        # Define the energy
+        energy = model.energy(state, domain)
+        # Derivative of the energy with respect to displacement to obtain the linear problem to determine the stationary point
+        E_u = ufl.derivative(
+            energy - ufl.dot(u, self.u_km1) * ufl.dx, u, ufl.TestFunction(V_u)
+        )
+        E_du = ufl.replace(E_u, {u: ufl.TrialFunction(V_u)})
+        # Define the displacement problem
+        problem_u = LinearProblem(
+            a=ufl.lhs(E_du),
+            L=ufl.rhs(E_du),
+            bcs=bcs_u,
+            u=None,
+            petsc_options={
+                "ksp_type": "cg",
+                "ksp_rtol": 1e-8,
+                "ksp_atol": 1e-10,
+                "ksp_max_it": 1000,
+                "pc_type": "gamg",
+                "pc_gamg_agg_nsmooths": 1,
+                "pc_gamg_esteig_ksp_type": "cg",
+            },
+            # petsc_options={
+            #     "ksp_type": "preonly",
+            #     "pc_type": "lu",
+            #     "pc_factor_solver_type": "mumps",
+            # },
+        )
+        # Define the null space (optimization with GAMG PC)
+        ns = build_elasticity_nullspace(V_u)
+        problem_u.A.setNearNullSpace(ns)
+        problem_u.A.setOption(PETSc.Mat.Option.SPD, True)  # type: ignore
+        # Display information about the displacement solver
+        problem_u.solver.view()
+        # Store the problem
+        self.problem_u = problem_u
+
+    def update(self, t: float):
+        """
+        Update the partitioned displacement subproblem.
+
+        Parameters
+        ----------
+        t : float
+            Time parameter.
+        """
+        # Update the load factor
+        self.dl = self.dt if t > 0 else 0.0
+
+    def solve(self):
+        """Solve the partitioned displacement subproblem."""
+        # Update previous displacement
+        self.u_km1.x.array[:] = self.u.x.array[:]
+        # Set boundary conditions to 0
+        self.update_boundary_conditions(0.0)
+        # Get the displacement increment
+        du = self.problem_u.solve()
+        du1 = du.copy()
+        # Set boundary conditions to 1
+        self.update_boundary_conditions(1.0)
+        # Get the displacement increment
+        du = self.problem_u.solve()
+        du2 = du.copy()
+        # Update the displacement
+        self.u.x.array[:] += du1.x.array[:] + self.dl * du2.x.array[:]
+
+
 class CrackPhaseSubProblem:
     """
     Class for solving the crack phase sub-problem.
