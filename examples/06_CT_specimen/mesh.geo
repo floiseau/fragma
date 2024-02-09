@@ -1,3 +1,10 @@
+//// Notes /////////////////////////////
+// The pre-crack in this methc is a kind
+// of notch with a fixed thickness.
+// See the meshes from examples 07 or 05
+// to make a infinitely thin pre-crack.
+////////////////////////////////////////
+
 //// Options ///////////////////////////
 SetFactory("OpenCASCADE");
 

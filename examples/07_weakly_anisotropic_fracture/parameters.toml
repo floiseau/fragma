@@ -39,9 +39,6 @@ bot_1 = 0
 top_0 = 0
 top_1 = 5e-4
 
-[postprocess]
-# TODO fields = ["strain", "stress"]
-
 [postprocess.probes]
 displacement= [
     [0, 0.409, 0],

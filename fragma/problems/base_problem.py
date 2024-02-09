@@ -1,3 +1,13 @@
+"""
+Base Problem Module
+===================
+
+This module provides a base class for defining and solving problems.
+
+Classes:
+    BaseProblem: Base class for defining and solving problems.
+"""
+
 import json
 
 from domain import Domain
@@ -7,7 +17,34 @@ from postprocess import PostProcessor
 
 
 class BaseProblem:
+    """
+    Base class for defining and solving problems.
+
+    Attributes
+    ----------
+    pars : dict
+        Dictionary containing parameters for the problem.
+    domain : Domain
+        The domain over which the problem is defined.
+    subproblems : dict
+        Dictionary containing subproblems of the main problem.
+    postprocessor : PostProcessor
+        Post-processor for analyzing simulation results.
+    exporter : Exporter
+        Exporter for saving simulation results.
+    time_stepper : ProportionalTimeStepper
+        Time stepper for time integration during simulation.
+    """
+
     def __init__(self, pars):
+        """
+        Initialize the BaseProblem.
+
+        Parameters
+        ----------
+        pars : dict
+            Dictionary containing parameters for the problem.
+        """
         ### Parameters
         print("\n████ PARAMETERS")
         # Store paramters
@@ -34,20 +71,41 @@ class BaseProblem:
         self.exporter = Exporter(self.domain.mesh, functions_to_export, probes)
 
     def define_state_variables(self):
+        """
+        Define the state variables for the problem.
+
+        This method must be implemented in the child class.
+        """
         raise NotImplementedError(
             "Solver: The method 'define_state_variables' must be implemented in the child class."
         )
 
     def define_subproblems(self):
+        """
+        Define the subproblems for the problem.
+
+        This method must be implemented in the child class.
+        """
         raise NotImplementedError(
             "Solver: The method 'define_subproblems' must be implemented in the child class."
         )
 
     def update_subproblems(self, t: float):
+        """
+        Update the subproblems for the current time step.
+
+        Parameters
+        ----------
+        t : float
+            Current time.
+        """
         for subproblem in self.subproblems.values():
             subproblem.update(t)
 
     def solve(self):
+        """
+        Solve the problem over time.
+        """
         print("\n████ RESOLUTION")
         # Initialize the time stepper
         self.time_stepper = ProportionalTimeStepper(self.pars["loading"]["dt"])
@@ -70,6 +128,11 @@ class BaseProblem:
         self.exporter.end()
 
     def solve_iteration(self):
+        """
+        Solve a single iteration of the problem.
+
+        This method must be implemented in the child class.
+        """
         raise NotImplementedError(
             "Solver: The method 'solve_iteration' must be implemented in the child class."
         )
