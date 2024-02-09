@@ -111,7 +111,7 @@ class DisplacementSubProblem:
         # Get the function spaces
         V_u = u.function_space
         # Define the energy
-        energy = model.energy(state, domain.mesh)
+        energy = model.energy(state, domain)
         # Derivative of the energy with respect to displacement to obtain the linear problem to determine the stationary point
         E_u = ufl.derivative(energy, u, ufl.TestFunction(V_u))
         E_du = ufl.replace(E_u, {u: ufl.TrialFunction(V_u)})
@@ -146,11 +146,30 @@ class DisplacementSubProblem:
         self.problem_u = problem_u
 
     def update(self, t: float):
+        """
+        This method is typically used to update boundary conditions, problem bounds,
+        right-hand side terms, or any other parameters that may change over time.
+        """
         # Update boundary conditions
         self.update_boundary_conditions(t)
 
     def solve(self):
         self.problem_u.solve()
+
+class DisplacementSubProblemPathFollowing(DisplacementSubProblem):
+    """Displacement sub-problem for the path-following method using the penalty method.
+    
+    This subproblem is the same as the DisplacementSubProblem but we remove the treatment of Dirichlet boundary conditions by lifting (except for the potential lock point).
+    """
+
+
+    def initialize_boundary_conditions(self, pars, domain, state):
+        bcs_u = []
+        # Define a lock point
+        bcs_u += self.define_lock_point(pars, domain, state)
+        # Return the boundary conditions
+        return bcs_u
+
 
 
 class CrackPhaseSubProblem:
@@ -169,7 +188,7 @@ class CrackPhaseSubProblem:
         # Get the function spaces
         V_alpha = alpha.function_space
         # Define the energy
-        energy = model.energy(state, domain.mesh)
+        energy = model.energy(state, domain)
         # Derivative of the energy with respect to crack phase
         E_alpha = ufl.derivative(energy, alpha, ufl.TestFunction(V_alpha))
         E_alpha_alpha = ufl.derivative(E_alpha, alpha, ufl.TrialFunction(V_alpha))

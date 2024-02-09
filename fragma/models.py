@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 
 from dolfinx import fem, default_scalar_type
@@ -49,15 +51,17 @@ class ElasticModel(BaseModel):
         super().__init__(pars)
 
     def energy(self, state, domain):
-        # Get the dimension of the domain
-        dim = domain.geometry.dim
+        # Get the mesh
+        mesh = domain.mesh
+        # Get the dimension of the mesh
+        dim = mesh.geometry.dim
         # Get the integrands
-        dx = ufl.Measure("dx", domain=domain)
-        ds = ufl.Measure("ds", domain=domain)
+        dx = ufl.Measure("dx", domain=mesh)
+        ds = ufl.Measure("ds", domain=mesh)
         # Define the imposed stress on the remaining of the boundary
-        T = fem.Constant(domain, default_scalar_type([0 for d in range(dim)]))
+        T = fem.Constant(mesh, default_scalar_type([0 for d in range(dim)]))
         # Define the volumic forces
-        f = fem.Constant(domain, default_scalar_type([0 for d in range(dim)]))
+        f = fem.Constant(mesh, default_scalar_type([0 for d in range(dim)]))
         # Get state variables
         u = state["u"]
         # Define the energy terms
@@ -156,15 +160,17 @@ class FractureModel(BaseModel):
         return self.a(state["alpha"]) * self.sig(state)
 
     def energy(self, state, domain):
-        # Get the dimension of the domain
-        dim = domain.geometry.dim
+        # Get the mesh from the domain
+        mesh = domain.mesh
+        # Get the dimension of the mesh
+        dim = mesh.geometry.dim
         # Get the integrands
-        dx = ufl.Measure("dx", domain=domain)
-        ds = ufl.Measure("ds", domain=domain)
+        dx = ufl.Measure("dx", domain=mesh)
+        ds = ufl.Measure("ds", domain=mesh)
         # Define the imposed stress on the remaining of the boundary
-        T = fem.Constant(domain, default_scalar_type([0 for d in range(dim)]))
+        T = fem.Constant(mesh, default_scalar_type([0 for d in range(dim)]))
         # Define the volumic forces
-        f = fem.Constant(domain, default_scalar_type([0 for d in range(dim)]))
+        f = fem.Constant(mesh, default_scalar_type([0 for d in range(dim)]))
         # Get state variables
         u, alpha = state["u"], state["alpha"]
         # Get the fracture parameters
@@ -180,7 +186,7 @@ class FractureModel(BaseModel):
                     [np.sin(2 * theta_0), -np.cos(2 * theta_0)],
                 ]
             )
-        A = fem.Constant(domain, A_np)
+        A = fem.Constant(mesh, A_np)
         # Define the energy terms
         elastic_energy = 0.5 * ufl.inner(self.sig_eff(state), self.eps(state)) * dx
         dissipated_energy = (
@@ -196,6 +202,91 @@ class FractureModel(BaseModel):
         # Define the total energy
         return elastic_energy + dissipated_energy - external_work
 
+
+class FractureModelPathFollowing(FractureModel):
+    """Model associated to path-following model using the penalty method.
+
+    Compared to the classic fracture model, it redefines the energy to account for the boundary conditions using a
+    penalty method. It also constrained the growth the crack.
+    """
+
+    def __init__(self, pars):
+        # Initialise parent class
+        super().__init__(pars)
+        # Store the displacement increments
+        self.u_imp_max = pars["loading"]["u_imp_max"]
+
+    def energy(self, state, domain):
+        # Get the mesh
+        mesh = domain.mesh
+        # Get the dimension of the mesh
+        dim = mesh.geometry.dim
+        # Get the integrands
+        dx = ufl.Measure("dx", domain=mesh)
+        ds = ufl.Measure("ds", domain=mesh)
+        # Define the imposed stress on the remaining of the boundary
+        T = fem.Constant(mesh, default_scalar_type([0 for d in range(dim)]))
+        # Define the volumic forces
+        f = fem.Constant(mesh, default_scalar_type([0 for d in range(dim)]))
+        # Get state variables
+        u, alpha = state["u"], state["alpha"]
+        Lamb, Gamma, alpha_old = state["Lamb"], state["Gamma"], state["alpha_old"]
+
+        # Define the penalty coefficient
+        p = 1e12
+        # Define the crack increment
+        dGamma = 5e-7
+
+        # Get the fracture parameters
+        Gc, ell = self.Gc, self.ell
+        cw = self.cw()
+        # Compute the anisotropy matrix
+        aG, theta_0 = self.aG, self.theta_0
+        A_np = np.eye(dim)
+        if aG != 0:
+            A_np += aG * np.array(
+                [
+                    [np.cos(2 * theta_0), np.sin(2 * theta_0)],
+                    [np.sin(2 * theta_0), -np.cos(2 * theta_0)],
+                ]
+            )
+        A = fem.Constant(mesh, A_np)
+        # Define the energy terms
+        elastic_energy = 0.5 * ufl.inner(self.sig_eff(state), self.eps(state)) * dx
+        dissipated_energy = (
+            Gc
+            / cw
+            * (
+                self.w(alpha) / ell
+                + ell * ufl.dot(ufl.grad(alpha), A * ufl.grad(alpha))
+            )
+            * dx
+        )
+        external_work = ufl.dot(f, u) * dx + ufl.dot(T, u) * ds
+
+        ### Constraint calculations
+        # Get integrands on boundary where displacement is imposed
+        ds_us = {}
+        names = set([re.search(r"([\w\d-]+)_\d+", name).group(1) for name in self.u_imp_max])
+        for load_name in self.u_imp_max:
+            facets = [facet for f_name, facet in domain.boundary_facets.items() if f_name in load_name]
+            ds_us[load_name] = ufl.Measure("ds", domain=mesh, subdomain_data=facets)
+        # Initialize the sum of displacement constraints
+        int_C_u = 0
+        for name, ds_u in ds_us.items():
+            # Get the component
+            comp = int(name.split("_")[-1])
+            # Increment the constraint sum
+            int_C_u += (u.sub(comp)-Lamb*self.u_imp_max[name])**2 * ds_u
+
+        # int_C_Gamma = (alpha*dx-Gamma-dGamma)**2
+        # TODO: The square does not work
+        int_C_Gamma = ((alpha-alpha_old-dGamma)*dx)**2
+            
+        constraints = p*(int_C_u + int_C_Gamma)
+
+        # Define the total energy
+        return elastic_energy + dissipated_energy - external_work + constraints
 
 class FractureModelMiehe(FractureModel):
     """Model associated to the solver of Miehe et at. (2010).
@@ -234,15 +325,17 @@ class FractureModelMiehe(FractureModel):
         H.vector.assemble()
 
     def energy(self, state, domain):
-        # Get the dimension of the domain
-        dim = domain.geometry.dim
+        # Get the mesh from the domain
+        mesh = domain.mesh
+        # Get the dimension of the mesh
+        dim = mesh.geometry.dim
         # Get the integrands
-        dx = ufl.Measure("dx", domain=domain)
-        ds = ufl.Measure("ds", domain=domain)
+        dx = ufl.Measure("dx", domain=mesh)
+        ds = ufl.Measure("ds", domain=mesh)
         # Define the imposed stress on the remaining of the boundary
-        T = fem.Constant(domain, default_scalar_type([0 for d in range(dim)]))
+        T = fem.Constant(mesh, default_scalar_type([0 for d in range(dim)]))
         # Define the volumic forces
-        f = fem.Constant(domain, default_scalar_type([0 for d in range(dim)]))
+        f = fem.Constant(mesh, default_scalar_type([0 for d in range(dim)]))
         # Get state variables
         u, alpha, H = state["u"], state["alpha"], state["H"]
         # Get the fracture parameters
@@ -258,7 +351,7 @@ class FractureModelMiehe(FractureModel):
                     [np.sin(2 * theta_0), -np.cos(2 * theta_0)],
                 ]
             )
-        A = fem.Constant(domain, A_np)
+        A = fem.Constant(mesh, A_np)
         # Define the energy terms
         elastic_energy = 0.5 * ufl.inner(self.sig_eff(state), self.eps(state)) * dx
         dissipated_energy = (
