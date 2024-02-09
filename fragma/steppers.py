@@ -29,3 +29,29 @@ class ProportionalTimeStepper:
         """Increment the time by the time step."""
         # Increment time
         self.t += self.dt
+
+    def not_end(self):
+        return self.t <= 1.0 + 1e-12
+
+
+# class LoadStepper:
+#
+#     def __init__(self, dt: float):
+#         """Initialize the time stepper.
+#
+#         Args:
+#             dt (float): The initial time step.
+#
+#         """
+#         # Initialize the time
+#         self.t = 0
+#         # Set the initial time step
+#         self.dt = dt
+#
+#     def increment(self):
+#         """Increment the time by the time step."""
+#         # Increment time
+#         self.t += self.dt
+#
+#     def not_end(self):
+#         return self.t<1.0

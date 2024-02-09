@@ -14,7 +14,7 @@ import ufl
 
 from problems.base_problem import BaseProblem
 from models import ElasticModel
-from subproblems import DisplacementSubProblem
+from subproblems import create_displacement_subproblem
 
 
 class ElasticityProblem(BaseProblem):
@@ -65,8 +65,9 @@ class ElasticityProblem(BaseProblem):
         """
         Define the subproblems for the elasticity problem.
         """
+        print("\n████ DEFINITION OF THE SUB-PROBLEMS")
         # Define the displacement problem
-        self.subproblems["u"] = DisplacementSubProblem(
+        self.subproblems["u"] = create_displacement_subproblem(
             self.pars, self.domain, self.state, self.model
         )
 

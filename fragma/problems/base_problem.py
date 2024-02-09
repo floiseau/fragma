@@ -11,7 +11,7 @@ Classes:
 import json
 
 from domain import Domain
-from timestepper import ProportionalTimeStepper
+from steppers import ProportionalTimeStepper
 from exporter import Exporter
 from postprocess import PostProcessor
 
@@ -32,7 +32,7 @@ class BaseProblem:
         Post-processor for analyzing simulation results.
     exporter : Exporter
         Exporter for saving simulation results.
-    time_stepper : ProportionalTimeStepper
+    stepper : ProportionalTimeStepper
         Time stepper for time integration during simulation.
     """
 
@@ -108,12 +108,12 @@ class BaseProblem:
         """
         print("\n████ RESOLUTION")
         # Initialize the time stepper
-        self.time_stepper = ProportionalTimeStepper(self.pars["loading"]["dt"])
-        while self.time_stepper.t < 1:
+        self.stepper = ProportionalTimeStepper(self.pars["loading"]["dt"])
+        while self.stepper.not_end():
             # Get time
-            t = self.time_stepper.t
+            t = self.stepper.t
             # Display information
-            print(f"== Time {t:.8g}")
+            print(f"\n== Time {t:.8g}")
             # Update subproblems
             self.update_subproblems(t)
             # Solve the problems for this iteration
@@ -123,7 +123,7 @@ class BaseProblem:
             # Export the results
             self.exporter.export(t)
             # Increment the time stepper
-            self.time_stepper.increment()
+            self.stepper.increment()
         # End export
         self.exporter.end()
 

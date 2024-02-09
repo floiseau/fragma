@@ -15,6 +15,48 @@ from utils.build_nullspace import build_elasticity_nullspace
 from utils.snes_problem import SNESProblem
 
 
+def create_displacement_subproblem(pars, domain, state, model):
+    """
+    Create a displacement subproblem based on the provided parameters.
+
+    Parameters
+    ----------
+    pars : dict
+        Parameters for the subproblem.
+    domain : Domain
+        Domain object representing the computational domain.
+    state : dict
+        State variables for the problem.
+    model : Model
+        Model object defining the physics of the problem.
+
+    Returns
+    -------
+    DisplacementSubProblem or DisplacementPartitionedSubProblem
+        Depending on the loading constraint specified in the parameters, either a
+        DisplacementSubProblem or a DisplacementPartitionedSubProblem instance is returned.
+
+    Notes
+    -----
+    This function creates a displacement subproblem based on the parameters provided. If a loading
+    constraint is specified in the parameters, a DisplacementPartitionedSubProblem instance is
+    created to handle partitioned displacement problems. Otherwise, a DisplacementSubProblem
+    instance is created for conventional displacement problems.
+
+    Examples
+    --------
+    >>> subproblem = create_displacement_subproblem(pars, domain, state, model)
+    """
+    # Get the loading constraint
+    constraint = pars.get("loading", {}).get("constraint", None)
+    if constraint is None:
+        print("Using the monolithic displacement sub-problem.")
+        return DisplacementSubProblem(pars, domain, state, model)
+    else:
+        print("Using the partitioned displacement sub-problem.")
+        return DisplacementPartitionedSubProblem(pars, domain, state, model)
+
+
 class DisplacementSubProblem:
     """
     Class for solving the displacement sub-problem.
@@ -280,7 +322,20 @@ class DisplacementSubProblem:
 
 
 class DisplacementPartitionedSubProblem(DisplacementSubProblem):
-    """Class representing a partitioned subproblem for displacement."""
+    """
+    Class representing a partitioned displacement subproblem.
+
+    This class extends the DisplacementSubProblem and implements a partitioned displacement
+    problem, where the problem is defined and solved in terms of displacement increments.
+    The resolution is carried by solving two linear system. More informations are available
+    in the paper of Rastiello et al. [1].
+
+    References
+    ----------
+    .. [1] Rastiello, G., Oliveira, H. L., & Millard, A. (2022). Path-following methods for
+           unstable structural responses induced by strain softening: A critical review.
+           Comptes Rendus. Mécanique, 350(G2), 205–236. https://doi.org/10.5802/crmeca.112
+    """
 
     def __init__(self, pars, domain, state, model):
         """
@@ -298,8 +353,29 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
             Model defining the problem's behavior.
         """
         super().__init__(pars, domain, state, model)
-        # Store the timestep increment (TODO Remove)
+        # Store the timestep increment
         self.dt = pars["loading"]["dt"]
+        # Store the constraint
+        self.constraint = pars["loading"]["constraint"]
+        # Store the model
+        self.model = model
+        # Initialize the load factor
+        self.l = 0.0
+        # Constraint-specific initialization
+        if self.constraint == "max_strain_inc":
+            # Get the first load factor increment
+            self.dl0 = pars["loading"]["dl0"]
+            # Set the maximal increment of strain
+            self.dtau = pars["loading"]["dtau"]
+            # Generate a function space for strain-like scalars
+            eps_ufl = model.eps(state)
+            eps_elem = ufl.TensorElement(
+                "DG", domain.mesh.ufl_cell(), 0, shape=eps_ufl.ufl_shape
+            )
+            self.V_eps = fem.FunctionSpace(domain.mesh, eps_elem)
+            # Generate a function space for strain-like scalars
+            eps_scal_elem = ufl.FiniteElement("DG", domain.mesh.ufl_cell(), 0)
+            self.V_eps_scal = fem.FunctionSpace(domain.mesh, eps_scal_elem)
 
     def define_problem(self, domain, state, model, bcs_u):
         """
@@ -373,8 +449,26 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         t : float
             Time parameter.
         """
-        # Update the load factor
-        self.dl = self.dt if t > 0 else 0.0
+        # Store the time
+        self.t = t
+        # Reset the iteration counter
+        self.k = 1
+        # Store the displacement at the beginning of load step
+        self.u0 = self.u.copy()
+        # Check the constraint
+        if self.constraint == "max_strain_inc":
+            # Compute the normalized strain from previous load steps
+            eps0 = self.model.eps({"u": self.u0})
+            eps0_norm = ufl.sqrt(ufl.inner(eps0, eps0))
+            eps0_normed_expr = fem.Expression(
+                eps0 / eps0_norm, self.V_eps.element.interpolation_points()
+            )
+            self.eps0_normed = fem.Function(self.V_eps, name="NormedStrain")
+            self.eps0_normed.interpolate(eps0_normed_expr)
+            # Store the previous strain for element selection
+            eps0_expr = fem.Expression(eps0, self.V_eps.element.interpolation_points())
+            self.eps0 = fem.Function(self.V_eps, name="PreviousStrain")
+            self.eps0.interpolate(eps0_expr)
 
     def solve(self):
         """Solve the partitioned displacement subproblem."""
@@ -390,8 +484,41 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         # Get the displacement increment
         du = self.problem_u.solve()
         du2 = du.copy()
+        # Computation of the incremement of load factor
+        match self.constraint:
+            case "time":
+                # Set the increment of load factor equal to dt
+                dl = self.dt if self.t > 0 else 0.0
+            case "max_strain_inc":
+                if self.t > 0:
+                    # Compute the load factor increment for each element
+                    deps1 = self.model.eps({"u": self.u - self.u0 + du1})
+                    deps2 = self.model.eps({"u": du2})
+                    a0 = ufl.inner(self.eps0_normed, deps1)
+                    a1 = ufl.inner(self.eps0_normed, deps2)
+                    dlambdas_expr = fem.Expression(
+                        (self.dtau - a0) / a1,
+                        self.V_eps_scal.element.interpolation_points(),
+                    )
+                    dlambdas = fem.Function(self.V_eps_scal, name="dlambdas")
+                    dlambdas.interpolate(dlambdas_expr)
+                    # Select the critical element (with max strain
+                    idx = np.argmax(self.eps0.x.array[:])
+                    print(f"   | Max strain element    : {idx}")
+                    # Get the
+                    dl = dlambdas.x.array[idx]
+                else:
+                    # Arbitary load factor increment at first load step
+                    dl = self.dl0 if self.k == 1 else 0.0
+        # Increment the load factor
+        self.l += dl
+        # Display the load factor increment
+        print(f"   | Load factor increment : {dl:.4g}")
+        print(f"   | Load factor           : {self.l:.4g}")
         # Update the displacement
-        self.u.x.array[:] += du1.x.array[:] + self.dl * du2.x.array[:]
+        self.u.x.array[:] += du1.x.array[:] + dl * du2.x.array[:]
+        # Increment the iteration counter
+        self.k += 1
 
 
 class CrackPhaseSubProblem:
