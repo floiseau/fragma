@@ -5,7 +5,33 @@ import ufl
 
 
 class BaseModel:
+    """
+    Base class for defining material models.
+
+    This class provides common functionalities and utilities for material models.
+
+    Parameters
+    ----------
+    pars : dict
+        Dictionary containing parameters of the material model.
+
+    Attributes
+    ----------
+    la : dolfinx.Constant
+        Lame coefficient lambda.
+    mu : dolfinx.Constant
+        Lame coefficient mu.
+    """
+
     def __init__(self, pars):
+        """
+        Initialize the BaseModel.
+
+        Parameters
+        ----------
+        pars : dict
+            Dictionary containing parameters of the material model.
+        """
         # Get elastic parameters
         E = pars["mechanical"]["E"]
         nu = pars["mechanical"]["nu"]
@@ -25,9 +51,35 @@ class BaseModel:
                     raise ValueError(f'The 2D assumption "{assumption}" in unknown')
 
     def eps(self, state):
+        """
+        Compute the strain tensor.
+
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing state variables.
+
+        Returns
+        -------
+        ufl.form.Expression
+            Strain tensor.
+        """
         return ufl.sym(ufl.grad(state["u"]))
 
     def sig(self, state):
+        """
+        Compute the stress tensor.
+
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing state variables.
+
+        Returns
+        -------
+        ufl.form.Expression
+            Stress tensor.
+        """
         # Get elastic parameters
         mu, la = self.mu, self.la
         # Get the state variables
@@ -36,28 +88,79 @@ class BaseModel:
         return la * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2.0 * mu * self.eps(state)
 
     def energy(self, state, mesh):
+        """
+        Compute the energy.
+
+        This method should be implemented in the child class.
+
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing state variables.
+        mesh : dolfinx.Mesh
+            The mesh representing the domain.
+
+        Raises
+        ------
+        NotImplementedError
+            If the method is not implemented in the child class.
+        """
         raise NotImplementedError(
             "Model: The method 'energy' must be implemented in the child class."
         )
 
 
 class ElasticModel(BaseModel):
-    """TODO"""
+    """
+    Material model for linear elasticity.
+
+    This class implements the material model for linear elasticity.
+
+    Parameters
+    ----------
+    pars : dict
+        Dictionary containing parameters of the material model.
+    """
 
     def __init__(self, pars):
+        """
+        Initialize the ElasticModel.
+
+        Parameters
+        ----------
+        pars : dict
+            Dictionary containing parameters of the material model.
+        """
         # Initialise parent class
         super().__init__(pars)
 
     def energy(self, state, domain):
-        # Get the dimension of the domain
-        dim = domain.geometry.dim
+        """
+        Compute the elastic energy.
+
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing state variables.
+        domain : Domain
+            The domain object representing the computational domain.
+
+        Returns
+        -------
+        ufl.form.Expression
+            Elastic energy.
+        """
+        # Get the mesh
+        mesh = domain.mesh
+        # Get the dimension of the mesh
+        dim = mesh.geometry.dim
         # Get the integrands
-        dx = ufl.Measure("dx", domain=domain)
-        ds = ufl.Measure("ds", domain=domain)
+        dx = ufl.Measure("dx", domain=mesh)
+        ds = ufl.Measure("ds", domain=mesh)
         # Define the imposed stress on the remaining of the boundary
-        T = fem.Constant(domain, default_scalar_type([0 for d in range(dim)]))
+        T = fem.Constant(mesh, default_scalar_type([0 for d in range(dim)]))
         # Define the volumic forces
-        f = fem.Constant(domain, default_scalar_type([0 for d in range(dim)]))
+        f = fem.Constant(mesh, default_scalar_type([0 for d in range(dim)]))
         # Get state variables
         u = state["u"]
         # Define the energy terms
@@ -68,9 +171,26 @@ class ElasticModel(BaseModel):
 
 
 class FractureModel(BaseModel):
-    """TODO"""
+    """
+    Material model for fracture mechanics.
+
+    This class implements the material model for fracture mechanics.
+
+    Parameters
+    ----------
+    pars : dict
+        Dictionary containing parameters of the material model.
+    """
 
     def __init__(self, pars):
+        """
+        Initialize the FractureModel.
+
+        Parameters
+        ----------
+        pars : dict
+            Dictionary containing parameters of the material model.
+        """
         # Initialise parent class
         super().__init__(pars)
         # Get the degradation model
@@ -86,6 +206,19 @@ class FractureModel(BaseModel):
         self.alpha_res = pars["numerical"]["alpha_res"]
 
     def a(self, alpha):
+        """
+        Degradation function.
+
+        Parameters
+        ----------
+        alpha : ufl.form.Expression
+            Crack phase.
+
+        Returns
+        -------
+        ufl.form.Expression
+            Degradation function.
+        """
         # Residual crack phase
         alpha_res = self.alpha_res
         # Compute a
@@ -99,7 +232,45 @@ class FractureModel(BaseModel):
                     f"The degradation model named '{self.deg_model}' does not exists."
                 )
 
+    def ap(self, alpha):
+        """
+        Derivative of the degradation function.
+
+        Parameters
+        ----------
+        alpha : ufl.form.Expression
+            Crack phase.
+
+        Returns
+        -------
+        ufl.form.Expression
+            Derivative of the degradation function.
+        """
+        # Compute w
+        match self.deg_model:
+            case "AT1":
+                return -2 * (1 - alpha)
+            case "AT2":
+                return -2 * (1 - alpha)
+            case _:
+                raise ValueError(
+                    f"The degradation model named '{self.deg_model}' does not exists."
+                )
+
     def w(self, alpha):
+        """
+        Dissipation function.
+
+        Parameters
+        ----------
+        alpha : ufl.form.Expression
+            Crack phase.
+
+        Returns
+        -------
+        ufl.form.Expression
+            Dissipation function.
+        """
         # Compute w
         match self.deg_model:
             case "AT1":
@@ -111,7 +282,40 @@ class FractureModel(BaseModel):
                     f"The degradation model named '{self.deg_model}' does not exists."
                 )
 
+    def wp(self, alpha):
+        """
+        Derivative of the dissipation function.
+
+        Parameters
+        ----------
+        alpha : ufl.form.Expression
+            Crack phase.
+
+        Returns
+        -------
+        ufl.form.Expression
+            Derivative of the dissipation function.
+        """
+        # Compute w
+        match self.deg_model:
+            case "AT1":
+                return 1
+            case "AT2":
+                return 2 * alpha
+            case _:
+                raise ValueError(
+                    f"The degradation model named '{self.deg_model}' does not exists."
+                )
+
     def cw(self):
+        """
+        Normalization coefficient.
+
+        Returns
+        -------
+        float
+            Normalization coefficient.
+        """
         match self.deg_model:
             case "AT1":
                 return 8 / 3
@@ -123,18 +327,48 @@ class FractureModel(BaseModel):
                 )
 
     def sig_eff(self, state):
+        """
+        Effective stress accounting the degradation due to the crack phase.
+
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing state variables.
+
+        Returns
+        -------
+        ufl.form.Expression
+            Effective stress.
+        """
         return self.a(state["alpha"]) * self.sig(state)
 
     def energy(self, state, domain):
-        # Get the dimension of the domain
-        dim = domain.geometry.dim
+        """
+        Compute the energy.
+
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing state variables.
+        domain : Domain
+            The domain object representing the computational domain.
+
+        Returns
+        -------
+        ufl.form.Expression
+            Total energy.
+        """
+        # Get the mesh from the domain
+        mesh = domain.mesh
+        # Get the dimension of the mesh
+        dim = mesh.geometry.dim
         # Get the integrands
-        dx = ufl.Measure("dx", domain=domain)
-        ds = ufl.Measure("ds", domain=domain)
+        dx = ufl.Measure("dx", domain=mesh)
+        ds = ufl.Measure("ds", domain=mesh)
         # Define the imposed stress on the remaining of the boundary
-        T = fem.Constant(domain, default_scalar_type([0 for d in range(dim)]))
+        T = fem.Constant(mesh, default_scalar_type([0 for d in range(dim)]))
         # Define the volumic forces
-        f = fem.Constant(domain, default_scalar_type([0 for d in range(dim)]))
+        f = fem.Constant(mesh, default_scalar_type([0 for d in range(dim)]))
         # Get state variables
         u, alpha = state["u"], state["alpha"]
         # Get the fracture parameters
@@ -150,7 +384,7 @@ class FractureModel(BaseModel):
                     [np.sin(2 * theta_0), -np.cos(2 * theta_0)],
                 ]
             )
-        A = fem.Constant(domain, A_np)
+        A = fem.Constant(mesh, A_np)
         # Define the energy terms
         elastic_energy = 0.5 * ufl.inner(self.sig_eff(state), self.eps(state)) * dx
         dissipated_energy = (
@@ -162,84 +396,6 @@ class FractureModel(BaseModel):
             )
             * dx
         )
-        external_work = ufl.dot(f, u) * dx + ufl.dot(T, u) * ds
-        # Define the total energy
-        return elastic_energy + dissipated_energy - external_work
-
-
-class FractureModelMiehe(FractureModel):
-    """Model associated to the solver of Miehe et at. (2010).
-
-    The only different the FractureModel is the introduction of the history field and its impact on the energy.
-    """
-
-    def update_history(self, state):
-        # Get the state variable
-        u, H = state["u"], state["H"]
-        # Get the dim
-        D = len(u)
-
-        ### Compute Phi0
-        # Get the elastic paramaters
-        mu, la = self.mu, self.la
-        # Get the function space of H
-        V_H = H.function_space
-        # Compute eps
-        eps = ufl.sym(ufl.grad(state["u"]))
-        # Compute its hydrostatic and deviatoric parts
-        tr_eps = ufl.inner(eps, ufl.Identity(D))
-        eps_dev = eps - 1 / D * tr_eps * ufl.Identity(D)
-        # Compute Phi0
-        # WARNING: Is the positive part of tr_eps necessary ????
-        Phi0_ufl = (
-            1 / 2 * ((la + 2 * mu / D) * tr_eps**2 + mu * ufl.inner(eps_dev, eps_dev))
-        )
-        # Generate the FEM expression
-        Phi0_expr = fem.Expression(Phi0_ufl, V_H.element.interpolation_points())
-        # Generate the function and interpolate it
-        Phi0 = fem.Function(V_H)
-        Phi0.interpolate(Phi0_expr)
-        # Compute H
-        H.vector[:] = np.maximum(Phi0.vector[:], H.vector[:])
-        H.vector.assemble()
-
-    def energy(self, state, domain):
-        # Get the dimension of the domain
-        dim = domain.geometry.dim
-        # Get the integrands
-        dx = ufl.Measure("dx", domain=domain)
-        ds = ufl.Measure("ds", domain=domain)
-        # Define the imposed stress on the remaining of the boundary
-        T = fem.Constant(domain, default_scalar_type([0 for d in range(dim)]))
-        # Define the volumic forces
-        f = fem.Constant(domain, default_scalar_type([0 for d in range(dim)]))
-        # Get state variables
-        u, alpha, H = state["u"], state["alpha"], state["H"]
-        # Get the fracture parameters
-        Gc, ell = self.Gc, self.ell
-        cw = self.cw()
-        # Compute the anisotropy matrix
-        aG, theta_0 = self.aG, self.theta_0
-        A_np = np.eye(dim)
-        if aG != 0:
-            A_np += aG * np.array(
-                [
-                    [np.cos(2 * theta_0), np.sin(2 * theta_0)],
-                    [np.sin(2 * theta_0), -np.cos(2 * theta_0)],
-                ]
-            )
-        A = fem.Constant(domain, A_np)
-        # Define the energy terms
-        elastic_energy = 0.5 * ufl.inner(self.sig_eff(state), self.eps(state)) * dx
-        dissipated_energy = (
-            Gc
-            / cw
-            * (
-                self.w(alpha) / ell
-                + ell * ufl.dot(ufl.grad(alpha), A * ufl.grad(alpha))
-            )
-            - H * (default_scalar_type(1.0) - alpha) ** 2
-        ) * dx
         external_work = ufl.dot(f, u) * dx + ufl.dot(T, u) * ds
         # Define the total energy
         return elastic_energy + dissipated_energy - external_work

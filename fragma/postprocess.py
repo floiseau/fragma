@@ -1,10 +1,46 @@
+"""
+Module for post-processing utilities.
+
+This module provides classes and functions for post-processing simulation results.
+"""
+
 from dolfinx import fem, geometry
 import ufl
 
 
 class PostProcessor:
+    """
+    Class for post-processing simulation results.
+
+    This class provides functionalities to compute strain, stress, and other quantities from simulation results.
+
+    Parameters
+    ----------
+    domain : Domain
+        The domain object representing the computational domain.
+    model : BaseModel
+        The material model used in the simulation.
+    state : dict
+        Dictionary containing state variables.
+    postprocess_pars : dict
+        Dictionary containing parameters for post-processing.
+    """
+
     def __init__(self, domain, model, state, postprocess_pars):
-        """Initialize the post-processing."""
+        """
+        Initialize the PostProcessor.
+
+        Parameters
+        ----------
+        domain : Domain
+            The domain object representing the computational domain.
+        model : BaseModel
+            The material model used in the simulation.
+        state : dict
+            Dictionary containing state variables.
+        postprocess_pars : dict
+            Dictionary containing parameters for post-processing.
+        """
         # Initialize the post expressions and functions
         self.exprs = {}
         self.funcs = {}
@@ -18,6 +54,18 @@ class PostProcessor:
         self.__initialize_probes(domain.mesh, state, postprocess_pars)
 
     def __initialize_strain(self, mesh, model, state):
+        """
+        Initialize strain calculation.
+
+        Parameters
+        ----------
+        mesh : dolfinx.Mesh
+            The mesh representing the domain.
+        model : BaseModel
+            The material model used in the simulation.
+        state : dict
+            Dictionary containing state variables.
+        """
         # Compute the strain from ufl
         eps_ufl = model.eps(state)
         # Generate FEM space for strain
@@ -32,6 +80,18 @@ class PostProcessor:
         self.funcs["eps"].interpolate(self.exprs["eps"])
 
     def __initialize_stress(self, mesh, model, state):
+        """
+        Initialize stress calculation.
+
+        Parameters
+        ----------
+        mesh : dolfinx.Mesh
+            The mesh representing the domain.
+        model : BaseModel
+            The material model used in the simulation.
+        state : dict
+            Dictionary containing state variables.
+        """
         # Compute the stress from ufl
         sig_ufl = model.sig(state)
         # Generate FEM space for stress
@@ -46,6 +106,18 @@ class PostProcessor:
         self.funcs["sig"].interpolate(self.exprs["sig"])
 
     def __initialize_probes(self, mesh, state, postprocess_pars):
+        """
+        Initialize probes.
+
+        Parameters
+        ----------
+        mesh : dolfinx.Mesh
+            The mesh representing the domain.
+        state : dict
+            Dictionary containing state variables.
+        postprocess_pars : dict
+            Dictionary containing parameters for post-processing.
+        """
         # Initialize the dict of probes
         self.probes = {}
         # Check if there are any probes
@@ -61,9 +133,10 @@ class PostProcessor:
             )
 
     def postprocess(self):
-        """Update the post-processed quantities.
+        """
+        Perform post-processing.
 
-        This method computes the strain and stress fields in the mesh.
+        This method updates the post-processed quantities such as strain, stress, and probe values.
         """
         # Update the field functions
         for func, expr in zip(self.funcs.values(), self.exprs.values()):
@@ -74,17 +147,36 @@ class PostProcessor:
 
 
 class Probes:
-    """Probes to evaluate func at the points xs."""
+    """
+    Class to evaluate a function at specified points.
+
+    This class represents probes used to evaluate a function at specific points in the domain.
+
+    Parameters
+    ----------
+    func : dolfinx.Function
+        The function to probe.
+    xs : numpy.ndarray
+        Positions of the probes.
+    mesh : dolfinx.Mesh
+        The mesh representing the domain.
+    """
 
     def __init__(self, func, xs, mesh):
-        """Initialize the displacement probes.
+        """
+        Initialize the Probes.
 
         This method is based on: https://jsdokken.com/dolfinx-tutorial/chapter1/membrane_code.html?#making-curve-plots-throughout-the-domain.
         Note that this source also contains the modifications for the parallel version.
 
-        Input:
-            func: Function to probe
-            xs: Positions of the probe
+        Parameters
+        ----------
+        func : dolfinx.Function
+            The function to probe.
+        xs : numpy.ndarray
+            Positions of the probes.
+        mesh : dolfinx.Mesh
+            The mesh representing the domain.
         """
         # Store the function
         self.func = func
@@ -103,36 +195,5 @@ class Probes:
         self.update()
 
     def update(self):
+        """Update the values of the probes."""
         self.vals = self.func.eval(self.xs, self.cells)
-
-
-# NOTE: the following class is working but likely to be less efficient than Probes.
-# class Probe:
-#     """Probe to evaluate func at the point x."""
-#
-#     def __init__(self, func, x, mesh):
-#         """Initialize a displacement probe.
-#
-#         This method is based on: https://jsdokken.com/dolfinx-tutorial/chapter1/membrane_code.html?#making-curve-plots-throughout-the-domain.
-#         Note that this source also contains the modifications for the parallel version.
-#
-#         Input:
-#             func: Function to probe
-#             x: Position of the probe
-#         """
-#         # Store the function
-#         self.func = func
-#         # Get the position of the probes
-#         self.x = x
-#         # Generate the bounding box tree
-#         bb_tree = geometry.bb_tree(mesh, mesh.topology.dim)
-#         # Find cells whose bounding-box collide with the the points
-#         cell_candidates = geometry.compute_collisions_points(bb_tree, [x])
-#         # Choose one of the cells that contains the point
-#         self.cell = geometry.compute_colliding_cells(mesh, cell_candidates, x)[0]
-#         # Initialize the value
-#         self.val = 0
-#
-#     def update(self):
-#         self.val = self.func.eval([self.x], [self.cell])
-#         print(self.val)

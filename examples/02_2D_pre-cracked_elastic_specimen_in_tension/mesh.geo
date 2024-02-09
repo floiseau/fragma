@@ -1,65 +1,49 @@
-////
-// Options
-////////////
-SetFactory("Built-in");
-Geometry.AutoCoherence = 0;
-Mesh.SaveAll = 1;
-
-////
 // Parameters
-///////////////
-// Geometry
-L  = DefineNumber[    1.0, Name "Parameters/L" ];
-H  = DefineNumber[ 0.28*L, Name "Parameters/H" ];
-a  = DefineNumber[  0.5*L, Name "Parameters/a" ];
-g  = DefineNumber[  0.1*L, Name "Parameters/g" ];
-nw = DefineNumber[  1e-16, Name "Parameters/nw" ];
-// Numerical
+Geometry.AutoCoherence = 0;
+
+//// Parameters
 lc = DefineNumber[ 0.01, Name "Parameters/lc" ];
+L = DefineNumber[ 1, Name "Parameters/L" ];
 
-////
-// Points
-///////////
-// Center part
-Point(1) = { -a,    -nw, 0, lc};
-Point(2) = { -a, -H/2+g, 0, lc};
-Point(3) = {L-a, -H/2+g, 0, lc};
-Point(4) = {L-a,  H/2-g, 0, lc};
-Point(5) = { -a,  H/2-g, 0, lc};
-Point(6) = { -a,     nw, 0, lc};
-// Crack tip
-Point(7) = {  0,      0, 0, lc};
-// TODO Upper grip
-// TODO Lower grip
+//// Points
+// Bot
+Point(11) = {0, 0, 0, lc};
+Point(12) = {L, 0, 0, lc};
+// Mid
+Point(21) = {L, L/2, 0, lc};
+Point(22) = {L/2, L/2, 0, lc}; // Crack tip
+Point(23) = {0, L/2, 0, lc}; // Bot crack lip
+Point(24) = {0, L/2, 0, lc}; // Top crack lip
+// Top
+Point(31) = {0, L, 0, lc};
+Point(32) = {L, L, 0, lc};
 
-////
-// Lines
-//////////
-// Boundaries
-Line(1) = {1, 2};
-Line(2) = {2, 3};
-Line(3) = {3, 4};
-Line(4) = {4, 5};
-Line(5) = {5, 6};
-// Crack line
-Line(6) = {6, 7};
-Line(7) = {7, 1};
+//// Lines
+// Bottom part
+Line(11) = {11, 12};
+Line(12) = {12, 21};
+Line(13) = {21, 22};
+Line(14) = {22, 23};
+Line(15) = {23, 11};
+// Top part
+Line(31) = {31, 32};
+Line(32) = {32, 21};
+// Line 13 (right to crack tip)
+Line(34) = {22, 24};
+Line(35) = {24, 31};
 
-////
-// Surfaces
-/////////////
-Curve Loop(1) = {1, 2, 3, 4, 5, 6, 7};
+//// Surfaces
+// Bottom part
+Curve Loop(1) = {11, 12, 13, 14, 15};
 Plane Surface(1) = {1};
+// // Top part
+Curve Loop(2) = {31, 32, 13, 34, 35};
+Plane Surface(2) = {2};
 
-////
-// Physical groups
-////////////////////
-// Volume
-Physical Surface("domain", 11) = {1};
-// Boundaries
-Physical Curve("left_bot", 9) = {1};
-Physical Curve("bot", 7) = {2};
-Physical Curve("top", 8) = {4};
-Physical Curve("left_top", 10) = {5};
-// TODO Add grip
-
+//// Physical groups
+// Domain
+Physical Surface("domain", 36) = {1, 2};
+// Lines
+Physical Curve("bot", 37) = {11};
+Physical Curve("top", 38) = {31};
+Physical Curve("crack", 39) = {14, 34};
