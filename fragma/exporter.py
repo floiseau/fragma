@@ -134,8 +134,6 @@ class VTKFieldExporter:
             file_name = results_folder / function.name
             # Create the VTK file
             new_file = io.VTKFile(mesh.comm, file_name.with_suffix(".vtk"), "w")
-            # Export the mesh
-            new_file.write_mesh(mesh)
             # Add the new file to the list
             self.files.append(new_file)
 
