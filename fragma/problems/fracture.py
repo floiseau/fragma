@@ -1,3 +1,13 @@
+"""
+Fracture Problem Module
+=======================
+
+This module provides a solver for fracture problems using a phase-field model.
+
+Classes:
+    FractureProblem: Solver for fracture problems using a phase-field model.
+"""
+
 import time
 
 from petsc4py import PETSc
@@ -15,15 +25,47 @@ from utils.build_nullspace import build_elasticity_nullspace
 
 
 class FractureProblem(BaseProblem):
-    """TODO"""
+    """
+    Solver for fracture problems using a phase-field model.
+
+    This class inherits from BaseProblem and provides functionality to solve
+    fracture problems using a phase-field model. It defines state variables,
+    subproblems, and methods to solve the problem over time.
+
+    Attributes
+    ----------
+    model : FractureModel
+        The fracture model used for solving the problem.
+    V_u : dolfinx.FunctionSpace
+        Function space for the displacement field.
+    V_alpha : dolfinx.FunctionSpace
+        Function space for the fracture phase field.
+    state : dict
+        Dictionary containing the state variables.
+    subproblems : dict
+        Dictionary containing subproblems of the main problem.
+    """
 
     def __init__(self, pars):
+        """
+        Initialize the FractureProblem solver.
+
+        Parameters
+        ----------
+        pars : dict
+            Dictionary containing parameters for the problem.
+        """
         # Create the elasticity model
         self.model = FractureModel(pars)
         # Initialise parent class
         super().__init__(pars)
 
     def define_state_variables(self):
+        """
+        Define the state variables for the fracture problem.
+
+        This method defines the displacement and fracture phase field variables.
+        """
         ### Variational formulation
         print("\n████ DEFINITION OF THE STATE VARIABLES")
         # Define the displacement field
@@ -40,6 +82,11 @@ class FractureProblem(BaseProblem):
         self.state = {"u": u, "alpha": alpha}
 
     def define_subproblems(self):
+        """
+        Define the subproblems for the fracture problem.
+
+        This method defines the displacement and fracture phase subproblems.
+        """
         # Define the displacement problem
         self.subproblems["u"] = DisplacementSubProblem(
             self.pars, self.domain, self.state, self.model
@@ -50,12 +97,37 @@ class FractureProblem(BaseProblem):
         )
 
     def monitor(self, t, error, time_u, time_alpha):
+        """
+        Monitor the progress of the fracture problem solver.
+
+        This method prints information about the current iteration, including
+        the iteration number, error, and computation times for solving the
+        displacement and fracture phase subproblems.
+
+        Parameters
+        ----------
+        t : int
+            Iteration number.
+        error : float
+            Error between current and previous iterations.
+        time_u : float
+            Computation time for solving the displacement subproblem.
+        time_alpha : float
+            Computation time for solving the fracture phase subproblem.
+        """
         if MPI.COMM_WORLD.rank == 0:
             print(
                 f"Iteration: {t:3d}, Error: {error:3.4e}, Time u: {time_u:3.4e}s, Time alpha: {time_alpha:3.4e}s"
             )
 
     def solve_iteration(self):
+        """
+        Solve a single iteration of the fracture problem.
+
+        This method iteratively solves the displacement and fracture phase
+        subproblems until convergence is achieved or the maximum number of
+        iterations is reached.
+        """
         # Get the state
         u, alpha = self.state["u"], self.state["alpha"]
         # Define alpha at previous iteration for error computation

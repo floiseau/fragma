@@ -7,8 +7,8 @@ This solver uses `fenicsx`.
 To run `fragma`, different python modules must be installed first.
 One can apply the following commands to install those modules inside an environment.
 ```shell
-$ conda create -n fenicsx-env
-$ conda activate fenicsx-env
+$ conda create -n fragma
+$ conda activate fragma
 $ conda install -c conda-forge fenics-dolfinx mpich pyvista python-gmsh mpi4py petsc4py scipy
 ```
 Note that it is recommanded to use [libmamba](https://www.anaconda.com/blog/a-faster-conda-for-a-growing-community) for a faster environment creation.
@@ -19,17 +19,15 @@ The content of the parameter file is described below, and examples are given in 
 
 Once both files are provided, different steps are necessary to run it.
 1. Go to the directory containing the parameter file `parameters.toml`.
-2. Activate the `fenicsx-env` environment (`conda activate fenicsx-env` or `micromamba activate fenicsx-env`).
+2. Activate the `fragma` environment using the command: `conda activate fragma`.
 3. Run `python path/to/repo/fragma/main.py`
 
-*It is also possible to run* `fragma` *directly in the environment using* `conda run -n fenicsx-env python path/to/repo/fragma/main.py` *(or the same comment with*`micromamba`*). Also, note that the examples contain a* `run.sh` *file, which generates the mesh and runs* `fragma`*.*
+*It is also possible to run* `fragma` *directly in the environment using* `conda run -n fragma python path/to/repo/fragma/main.py` . Also, note that the examples contain a* `run.sh` *file, which generates the mesh and runs* `fragma`*.*
 
-`fragma` will then generate a results directory containing the `results.xdmf` file (and the `results.h5` containing the results).
-The `results.xdmf` file can opened with Paraview to visualize the simulation results.
+`fragma` will then generate a results directory containing the VTK files.
+The files appearing as `quantity..pvtu` (*e.g.*, `Displacement..pvtu`) can be opened with Paraview to visualize the simulation results.
 
-It is also possible to use the `run.sh` files that are provided in the example to run `fragma`.
-
-*Remark: When using `conda`, one needs to update the `run.sh` files in the example by replacing `micromamba` with `conda`.*
+*Remark: In some Linux distribution, the environment variable `OMP_NUM_THREADS` is not set, leading FEniCSx solve the same problem on all the available cores. To prevent that, `OMP_NUM_THREADS=1` must be prepended to the command to run `fragma`.*
 
 ## Content of input files
 TODO

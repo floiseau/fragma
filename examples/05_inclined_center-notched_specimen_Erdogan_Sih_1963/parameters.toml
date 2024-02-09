@@ -14,14 +14,14 @@ crack = 12
 
 [numerical]
 atol = 1e-3
-max_iter = 100
+max_iter = 10_000
 alpha_res = 1e-6
 
 [mechanical]
 E = 3e9
 nu = 0.4
 Gc = 380
-ell = 0.6e-3 # Real value 0.3e-3
+ell = 2e-3 # Real value 0.3e-3
 
 [loading]
 dt = 0.01

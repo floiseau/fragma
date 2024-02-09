@@ -27,7 +27,7 @@ Gc = 380
 ell = 10e-3
 
 [loading]
-t_max = 0.004
+dt = 0.004
 
 [loading.u_imp_max]
 bot_pin_0 = 0

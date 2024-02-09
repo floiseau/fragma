@@ -1,3 +1,9 @@
+"""
+Module for defining sub-problems related to displacement and crack phase evolution.
+
+This module provides classes for defining sub-problems that solve for displacement and crack phase evolution.
+"""
+
 import numpy as np
 from petsc4py import PETSc
 
@@ -10,7 +16,38 @@ from utils.snes_problem import SNESProblem
 
 
 class DisplacementSubProblem:
+    """
+    Class for solving the displacement sub-problem.
+
+    This class defines a sub-problem that solves for displacement evolution.
+
+    Parameters
+    ----------
+    pars : dict
+        Dictionary containing parameters for the problem.
+    domain : Domain
+        The domain object representing the computational domain.
+    state : dict
+        Dictionary containing state variables.
+    model : BaseModel
+        The material model used in the simulation.
+    """
+
     def __init__(self, pars, domain, state, model):
+        """
+        Initialize the DisplacementSubProblem.
+
+        Parameters
+        ----------
+        pars : dict
+            Dictionary containing parameters for the problem.
+        domain : Domain
+            The domain object representing the computational domain.
+        state : dict
+            Dictionary containing state variables.
+        model : BaseModel
+            The material model used in the simulation.
+        """
         # Store the displacement increments
         self.u_imp_max = pars["loading"]["u_imp_max"]
         # Initialize the boundary conditions
@@ -19,6 +56,23 @@ class DisplacementSubProblem:
         self.define_problem(domain, state, model, bcs_u)
 
     def initialize_boundary_conditions(self, pars, domain, state):
+        """
+        Initialize boundary conditions.
+
+        Parameters
+        ----------
+        pars : dict
+            Dictionary containing parameters for the problem.
+        domain : Domain
+            The domain object representing the computational domain.
+        state : dict
+            Dictionary containing state variables.
+
+        Returns
+        -------
+        list
+            List of boundary conditions for the displacement sub-problem.
+        """
         bcs_u = []
         # Define a lock point
         bcs_u += self.define_lock_point(pars, domain, state)
@@ -28,6 +82,23 @@ class DisplacementSubProblem:
         return bcs_u
 
     def define_lock_point(self, pars, domain, state):
+        """
+        Define the lock point boundary condition.
+
+        Parameters
+        ----------
+        pars : dict
+            Dictionary containing parameters for the problem.
+        domain : Domain
+            The domain object representing the computational domain.
+        state : dict
+            Dictionary containing state variables.
+
+        Returns
+        -------
+        list
+            List of boundary conditions for the lock point.
+        """
         # Get the position of the point
         x0 = pars.get("loading", {}).get("lock_point", None)
         # Return if there is not lock point
@@ -54,6 +125,23 @@ class DisplacementSubProblem:
         return [fem.dirichletbc(u_zero, dofs, V_u)]
 
     def define_boundary_condition_functions(self, domain, state):
+        """
+        Define boundary condition functions for the displacement sub-problem.
+
+        This method initializes the boundary conditions for the displacement sub-problem.
+
+        Parameters
+        ----------
+        domain : Domain
+            The domain object representing the computational domain.
+        state : dict
+            Dictionary containing state variables.
+
+        Returns
+        -------
+        list
+            List of boundary conditions for the displacement sub-problem.
+        """
         print("\n████ DEFINITION OF THE DISPLACEMENT BOUNDARY CONDITIONS")
         # Get the state variable
         u = state["u"]
@@ -97,7 +185,16 @@ class DisplacementSubProblem:
         return bcs_u
 
     def update_boundary_conditions(self, t: float):
-        print("Update displacement boundary conditions")
+        """
+        Update boundary conditions for the displacement sub-problem.
+
+        This method updates the displacement boundary conditions based on the current time.
+
+        Parameters
+        ----------
+        t : float
+            Current time.
+        """
         # Iterate through the load functions
         for facet_name, load_func in self.load_funcs.items():
             # Update the load function
@@ -105,6 +202,23 @@ class DisplacementSubProblem:
                 bc_local.set(default_scalar_type(t * self.u_imp_max[facet_name]))
 
     def define_problem(self, domain, state, model, bcs_u):
+        """
+        Define the displacement problem.
+
+        This method sets up the displacement problem by defining the energy and its derivatives with respect to
+        the displacement variable. It then creates the LinearProblem object and initializes the PETSc linear solver.
+
+        Parameters
+        ----------
+        domain : Domain
+            The domain object representing the computational domain.
+        state : dict
+            Dictionary containing state variables.
+        model : BaseModel
+            The material model used in the simulation.
+        bcs_u : list
+            List of boundary conditions for the displacement sub-problem.
+        """
         print("\n████ DEFINITION OF THE DISPLACEMENT PROBLEM")
         # Get the state variables
         u = state["u"]
@@ -147,39 +261,80 @@ class DisplacementSubProblem:
 
     def update(self, t: float):
         """
+        Update the displacement sub-problem.
+
         This method is typically used to update boundary conditions, problem bounds,
         right-hand side terms, or any other parameters that may change over time.
+
+        Parameters
+        ----------
+        t : float
+            Time parameter.
         """
         # Update boundary conditions
         self.update_boundary_conditions(t)
 
     def solve(self):
+        """Solve the displacement sub-problem."""
         self.problem_u.solve()
-
-class DisplacementSubProblemPathFollowing(DisplacementSubProblem):
-    """Displacement sub-problem for the path-following method using the penalty method.
-    
-    This subproblem is the same as the DisplacementSubProblem but we remove the treatment of Dirichlet boundary conditions by lifting (except for the potential lock point).
-    """
-
-
-    def initialize_boundary_conditions(self, pars, domain, state):
-        bcs_u = []
-        # Define a lock point
-        bcs_u += self.define_lock_point(pars, domain, state)
-        # Return the boundary conditions
-        return bcs_u
-
 
 
 class CrackPhaseSubProblem:
+    """
+    Class for solving the crack phase sub-problem.
+
+    This class defines a sub-problem that solves for crack phase evolution.
+
+    Parameters
+    ----------
+    pars : dict
+        Dictionary containing parameters for the problem.
+    domain : Domain
+        The domain object representing the computational domain.
+    state : dict
+        Dictionary containing state variables.
+    model : BaseModel
+        The material model used in the simulation.
+    """
+
     def __init__(self, pars, domain, state, model):
+        """
+        Initialize the CrackPhaseSubProblem.
+
+        Parameters
+        ----------
+        pars : dict
+            Dictionary containing parameters for the problem.
+        domain : Domain
+            The domain object representing the computational domain.
+        state : dict
+            Dictionary containing state variables.
+        model : BaseModel
+            The material model used in the simulation.
+        """
         # Define the boundary conditions functions
         bcs_alpha = self.define_boundary_condition_functions(domain, state)
         # Define the crack phase problem
         self.define_problem(domain, state, model, bcs_alpha)
 
     def define_problem(self, domain, state, model, bcs_alpha):
+        """
+        Define the crack phase problem.
+
+        This method sets up the crack phase problem by defining the energy and its derivatives with respect to
+        the crack phase variable. It then creates the SNESProblem object and initializes the PETSc SNES solver.
+
+        Parameters
+        ----------
+        domain : Domain
+            The domain object representing the computational domain.
+        state : dict
+            Dictionary containing state variables.
+        model : BaseModel
+            The material model used in the simulation.
+        bcs_alpha : list
+            List of boundary conditions for the crack phase sub-problem.
+        """
         print("\n████ DEFINITION OF THE CRACK PHASE PROBLEM")
         # Get the state variables
         alpha = state["alpha"]
@@ -236,6 +391,23 @@ class CrackPhaseSubProblem:
         self.problem_alpha = problem_alpha
 
     def define_boundary_condition_functions(self, domain, state):
+        """
+        Define boundary condition functions for the crack phase sub-problem.
+
+        This method initializes the boundary conditions for the crack phase sub-problem.
+
+        Parameters
+        ----------
+        domain : Domain
+            The domain object representing the computational domain.
+        state : dict
+            Dictionary containing state variables.
+
+        Returns
+        -------
+        list
+            List of boundary conditions for the crack phase sub-problem.
+        """
         print("\n████ INITIALISATION OF THE CRACK FIELD")
         # Add the damage boundary conditions if there is an initial crack
         if "crack" in domain.boundary_facets:
@@ -270,61 +442,34 @@ class CrackPhaseSubProblem:
         return bcs_alpha
 
     def update_boundary_conditions(self, t: float):
+        """
+        Update boundary conditions for the crack phase sub-problem.
+
+        This method updates the crack phase boundary conditions based on the current time.
+
+        Parameters
+        ----------
+        t : float
+            Current time.
+        """
         ...
 
     def update(self, t: float):
+        """
+        Update the crack phase sub-problem.
+
+        This method updates the crack phase sub-problem at the specified time.
+
+        Parameters
+        ----------
+        t : float
+            Current time.
+        """
         # Update the crack phase lower bound
         self.alpha.vector.copy(self.alpha_lb.vector)
         # Update of boundary conditions ?
         self.update_boundary_conditions(t)
 
     def solve(self):
+        """Solve the crack phase sub-problem."""
         self.problem_alpha.solve(None, self.alpha.vector)
-
-
-class CrackPhaseSubProblemMiehe(CrackPhaseSubProblem):
-    def define_problem(self, domain, state, model, bcs_alpha):
-        print("\n████ DEFINITION OF THE CRACK PHASE PROBLEM")
-        # Get the state variables
-        alpha = state["alpha"]
-        # Store the state variable
-        self.alpha = alpha
-        # Get the function spaces
-        V_alpha = alpha.function_space
-        # Define the energy
-        energy = model.energy(state, domain.mesh)
-        # Derivative of the energy with respect to crack phase
-        E_alpha = ufl.derivative(energy, alpha, ufl.TestFunction(V_alpha))
-        E_dalpha = ufl.replace(E_alpha, {alpha: ufl.TrialFunction(V_alpha)})
-        # Define the displacement problem
-        problem_alpha = LinearProblem(
-            a=ufl.lhs(E_dalpha),
-            L=ufl.rhs(E_dalpha),
-            bcs=bcs_alpha,
-            u=alpha,
-            petsc_options={
-                "ksp_type": "cg",
-                "ksp_rtol": 1e-8,
-                "ksp_atol": 1e-10,
-                "ksp_max_it": 1000,
-                "pc_type": "gamg",
-                "pc_gamg_agg_nsmooths": 1,
-                "pc_gamg_esteig_ksp_type": "cg",
-            },
-            # petsc_options={
-            #     "ksp_type": "preonly",
-            #     "pc_type": "lu",
-            #     "pc_factor_solver_type": "mumps",
-            # },
-        )
-        # Display information about the displacement solver
-        problem_alpha.solver.view()
-        # Store the problem
-        self.problem_alpha = problem_alpha
-
-    def update(self, t: float):
-        # Update of boundary conditions ?
-        self.update_boundary_conditions(t)
-
-    def solve(self):
-        self.problem_alpha.solve()
