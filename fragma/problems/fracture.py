@@ -20,7 +20,7 @@ import ufl
 
 from models import FractureModel
 from problems.base_problem import BaseProblem
-from subproblems import DisplacementSubProblem, CrackPhaseSubProblem
+from subproblems import create_displacement_subproblem, CrackPhaseSubProblem
 from utils.build_nullspace import build_elasticity_nullspace
 
 
@@ -88,7 +88,7 @@ class FractureProblem(BaseProblem):
         This method defines the displacement and fracture phase subproblems.
         """
         # Define the displacement problem
-        self.subproblems["u"] = DisplacementSubProblem(
+        self.subproblems["u"] = create_displacement_subproblem(
             self.pars, self.domain, self.state, self.model
         )
         # Define the displacement problem
