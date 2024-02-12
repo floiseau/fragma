@@ -602,12 +602,17 @@ class CrackPhaseSubProblem:
         problem_alpha.setType("vinewtonrsls")
         problem_alpha.setFunction(snes_problem_alpha.F, b)
         problem_alpha.setJacobian(snes_problem_alpha.J, J)
-        problem_alpha.setTolerances(rtol=1.0e-9, max_it=50)
+        problem_alpha.setTolerances(atol=1e-9, rtol=1.0e-9, max_it=50)
 
         problem_alpha.getKSP().setType("preonly")
         problem_alpha.getKSP().setTolerances(rtol=1.0e-9)
         problem_alpha.getKSP().getPC().setType("lu")
         problem_alpha.getKSP().getPC().setFactorSolverType("mumps")
+        # TODO Optimize the crack phase solver
+        # problem_alpha.getKSP().setType("gmres")
+        # problem_alpha.getKSP().setTolerances(rtol=1.0e-9)
+        # problem_alpha.getKSP().getPC().setType("mg")
+        # problem_alpha.getKSP().getPC().setMGLevels(1)
 
         # Define lower and upper bounds functions for the crack phase field
         self.alpha_lb = fem.Function(V_alpha, name="Lower bound")
