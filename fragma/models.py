@@ -200,7 +200,7 @@ class FractureModel(BaseModel):
         self.ell = pars["mechanical"]["ell"]
         self.aG = pars["mechanical"]["aG"] if "aG" in pars["mechanical"] else 0
         self.theta_0 = (
-            pars["mechanical"]["theta_0"] if "theta_0" in pars["mechanical"] else 0
+            np.deg2rad(pars["mechanical"]["theta_0"]) if "theta_0" in pars["mechanical"] else 0
         )
         # Get the residual crack phase
         self.alpha_res = pars["numerical"]["alpha_res"]

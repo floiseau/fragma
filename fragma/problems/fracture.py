@@ -96,7 +96,7 @@ class FractureProblem(BaseProblem):
             self.pars, self.domain, self.state, self.model
         )
 
-    def monitor(self, k, l, error_u, error_a, time_u, time_alpha):
+    def monitor(self, k, error_u, error_a, time_u, time_alpha):
         """
         Monitor the progress of the fracture problem solver.
 
@@ -108,8 +108,6 @@ class FractureProblem(BaseProblem):
         ----------
         k : int
             Alternate minimization iteration number.
-        l : float
-            Load factor.
         error_u : float
             Displacement error between two successive alternate minimization iterations.
         error_a : float
@@ -120,9 +118,13 @@ class FractureProblem(BaseProblem):
             Computation time for solving the fracture phase subproblem.
         """
         if MPI.COMM_WORLD.rank == 0:
-            print(
-                f"Iteration: {k:3d}, Load factor: {l:3.4e}, Error u: {error_u:3.4e}, Error a: {error_a:3.4e}, Time u: {time_u:3.4e}s, Time alpha: {time_alpha:3.4e}s"
-            )
+            self.subproblems["u"].l
+            print(f"Iter: {k:04d}", end=", ")
+            print(f"Error u: {error_u:0.4e}", end=", ")
+            print(f"Error a: {error_a:0.4e}", end=", ")
+            print(f"Time u: {time_u:0.4e}s", end=", ")
+            print(f"Time alpha: {time_alpha:0.4e}s", end=", ")
+            print(f"Load factor: {self.subproblems['u'].l:0.4e}")
 
     def solve_iteration(self):
         """
@@ -177,7 +179,7 @@ class FractureProblem(BaseProblem):
                 and error_a <= self.pars["numerical"]["atol"]
             )
             # Display information
-            self.monitor(k, self.subproblems["u"].l, error_u, error_a, time_u, time_alpha)
+            self.monitor(k, error_u, error_a, time_u, time_alpha)
             # Update old fields
             u_old.x.array[:] = u.x.array
             u_old.x.scatter_forward()
