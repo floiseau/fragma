@@ -156,7 +156,6 @@ class ElasticModel(BaseModel):
         dim = mesh.geometry.dim
         # Get the integrands
         dx = ufl.Measure("dx", domain=mesh)
-        ds = ufl.Measure("ds", domain=mesh)
         # Get state variables
         u = state["u"]
         # Define the energy terms
@@ -361,7 +360,6 @@ class FractureModel(BaseModel):
         dim = mesh.geometry.dim
         # Get the integrands
         dx = ufl.Measure("dx", domain=mesh)
-        ds = ufl.Measure("ds", domain=mesh)
         # Get state variables
         u, alpha = state["u"], state["alpha"]
         # Get the fracture parameters
