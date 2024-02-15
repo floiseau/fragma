@@ -50,7 +50,6 @@ class SNESProblem:
         x: Vector containing the latest solution.
         b: Vector to assemble the residual into.
         """
-        """Assemble residual vector."""
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         x.copy(self.u.vector)
         self.u.vector.ghostUpdate(

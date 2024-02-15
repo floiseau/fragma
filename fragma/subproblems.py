@@ -404,8 +404,12 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         self.ui = self.u.copy()
         self.u1 = self.u.copy()
         self.u2 = self.u.copy()
+        # Generate an modified state with ui instead of u
+        modified_state = state.copy()
+        modified_state["u"] = self.ui
         # Define the problem using the parent class
-        super().define_problem(domain, {"u": self.ui, "alpha": state["alpha"]}, model, bcs_u)
+
+        super().define_problem(domain, modified_state, model, bcs_u)
 
     def update(self, t: float):
         """
