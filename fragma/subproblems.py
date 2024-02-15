@@ -97,6 +97,8 @@ class DisplacementSubProblem:
         self.u_imp_max = pars["loading"].get("u_imp_max", {})
         # Store the force loading
         self.f_imp_max = pars["loading"].get("f_imp_max", {})
+        # Store the contact force loading
+        self.fc_max = pars["loading"].get("fc_max", {})
         # Initialize the boundary conditions
         bcs_u = self.initialize_boundary_conditions(pars, domain, state)
         # Define the linear problem
@@ -250,6 +252,10 @@ class DisplacementSubProblem:
         # Iterate through the force load functions
         for facet_name, f_imp in self.f_imp_max.items():
             self.bcf_funcs[facet_name].value = t * np.array(f_imp)
+        # Iterate through the contact force load functions
+        for facet_name, fc in self.fc_max.items():
+            F = fc["F"]
+            self.bcf_funcs[facet_name].value = t * np.array(F)
 
     def compute_external_work(self, domain, state):
         """
@@ -285,7 +291,7 @@ class DisplacementSubProblem:
         # Get boundary facets
         boundary_facets = domain.boundary_facets
         # If there are not external forces
-        if not self.f_imp_max:
+        if not self.f_imp_max and not self.fc_max:
             # Get the integrands
             ds = ufl.Measure("ds", domain=domain.mesh)
             # Initialize the external work
@@ -318,6 +324,36 @@ class DisplacementSubProblem:
             )
             # Add the cohtribution to the external work
             external_work += ufl.dot(f, u) * ds
+
+        # Iterate through the forces
+        for facet_name, fc in self.fc_max.items():
+            # Get the parameters
+            F = fem.Constant(domain.mesh, fc["F"])
+            D = fc["D"]
+            L = fc["L"]
+            # Get the facets tags
+            facet = boundary_facets[facet_name]
+            facet_tags = dolfinx.mesh.meshtags(
+                domain.mesh,
+                domain.mesh.geometry.dim - 1,
+                facet,
+                np.full_like(facet, 1, dtype=np.int32),
+            )
+            # Store the load function
+            self.bcf_funcs[facet_name] = F
+            # Get the associated integrand
+            ds = ufl.Measure(
+                "ds",
+                domain=domain.mesh,
+                subdomain_data=facet_tags,
+                subdomain_id=1,
+            )
+            # Compute the normal
+            n = ufl.FacetNormal(domain.mesh)
+            # Compute the pressure
+            P = 4/(np.pi*L*D) * ufl.dot(F, n)
+            # Add the cohtribution to the external work
+            external_work += P * ufl.dot(n, u) * ds
         return external_work
 
     def define_problem(self, domain, state, model, bcs_u):
