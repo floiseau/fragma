@@ -249,7 +249,7 @@ class DisplacementSubProblem:
                 bc_local.set(default_scalar_type(t * self.u_imp_max[facet_name]))
         # Iterate through the force load functions
         for facet_name, f_imp in self.f_imp_max.items():
-            self.bcf_funcs[facet_name].value = t*np.array(f_imp)
+            self.bcf_funcs[facet_name].value = t * np.array(f_imp)
 
     def compute_external_work(self, domain, state):
         """
@@ -287,7 +287,7 @@ class DisplacementSubProblem:
         # Get the integrands
         dx = ufl.Measure("dx", domain=domain.mesh)
         # Initialize the external work
-        external_work = 0*dx
+        external_work = 0 * dx
         # Initialize functions
         self.bcf_funcs = {}
         # Iterate through the forces
@@ -295,20 +295,21 @@ class DisplacementSubProblem:
             # Get the facets tags
             facet = boundary_facets[facet_name]
             facet_tags = dolfinx.mesh.meshtags(
-                    domain.mesh,
-                    domain.mesh.geometry.dim-1,
-                    facet,
-                    np.full_like(facet, 1, dtype=np.int32))
+                domain.mesh,
+                domain.mesh.geometry.dim - 1,
+                facet,
+                np.full_like(facet, 1, dtype=np.int32),
+            )
             # Create the load function
             f = fem.Constant(domain.mesh, f_imp)
             self.bcf_funcs[facet_name] = f
             # Get the associated integrand
             ds = ufl.Measure(
-                    "ds",
-                    domain=domain.mesh,
-                    subdomain_data=facet_tags,
-                    subdomain_id=1,
-                    )
+                "ds",
+                domain=domain.mesh,
+                subdomain_data=facet_tags,
+                subdomain_id=1,
+            )
             # Add the cohtribution to the external work
             external_work += ufl.dot(f, u) * ds
         return external_work
@@ -549,12 +550,16 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                     # Choose the load factor using nested interval
                     a1_inf_0 = a1.x.array <= 0
                     a1_sup_0 = a1.x.array > 0
-                    l_max = np.min(lambdas[a1_sup_0]) if any(a1_sup_0) else  float("inf")
-                    l_min = np.max(lambdas[a1_inf_0]) if any(a1_inf_0) else -float("inf")
+                    l_max = np.min(lambdas[a1_sup_0]) if any(a1_sup_0) else float("inf")
+                    l_min = (
+                        np.max(lambdas[a1_inf_0]) if any(a1_inf_0) else -float("inf")
+                    )
                     # Check if the interval is valid
                     if l_max < l_min:
-                        raise RuntimeError(f"The maximal increment of load factor is inferior the the minimal (min: {l_min:.3g}, max: {l_max:.3g}.)")
-                    # Choose the load factor as the upper bound 
+                        raise RuntimeError(
+                            f"The maximal increment of load factor is inferior the the minimal (min: {l_min:.3g}, max: {l_max:.3g}.)"
+                        )
+                    # Choose the load factor as the upper bound
                     self.l = l_max
                 else:
                     # Arbitary load factor increment at first load step
