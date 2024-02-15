@@ -96,7 +96,7 @@ class FractureProblem(BaseProblem):
             self.pars, self.domain, self.state, self.model
         )
 
-    def monitor(self, t, error, time_u, time_alpha):
+    def monitor(self, k, l, error_u, error_a, time_u, time_alpha):
         """
         Monitor the progress of the fracture problem solver.
 
@@ -106,10 +106,14 @@ class FractureProblem(BaseProblem):
 
         Parameters
         ----------
-        t : int
-            Iteration number.
-        error : float
-            Error between current and previous iterations.
+        k : int
+            Alternate minimization iteration number.
+        l : float
+            Load factor.
+        error_u : float
+            Displacement error between two successive alternate minimization iterations.
+        error_a : float
+            Crack phase error between two successive alternate minimization iterations.
         time_u : float
             Computation time for solving the displacement subproblem.
         time_alpha : float
@@ -117,7 +121,7 @@ class FractureProblem(BaseProblem):
         """
         if MPI.COMM_WORLD.rank == 0:
             print(
-                f"Iteration: {t:3d}, Error: {error:3.4e}, Time u: {time_u:3.4e}s, Time alpha: {time_alpha:3.4e}s"
+                f"Iteration: {k:3d}, Load factor: {l:3.4e}, Error u: {error_u:3.4e}, Error a: {error_a:3.4e}, Time u: {time_u:3.4e}s, Time alpha: {time_alpha:3.4e}s"
             )
 
     def solve_iteration(self):
@@ -130,23 +134,23 @@ class FractureProblem(BaseProblem):
         """
         # Get the state
         u, alpha = self.state["u"], self.state["alpha"]
-        # Define alpha at previous iteration for error computation
-        alpha_old = fem.Function(alpha.function_space)
-        alpha.vector.copy(alpha_old.vector)
+        # Define state at previous iteration for error computation
+        u_old, alpha_old = u.copy(), alpha.copy()
+        # Initialize the errors
+        error_u, error_a = 0, 0
         # Get previous displacement (for over-relaxation)
         relaxation = "omega" in self.pars["numerical"]
         if relaxation:
             omega = self.pars["numerical"]["omega"]
-            u_old = u.copy()
         # Perform the alternate minimization
-        for t in range(self.pars["numerical"]["max_iter"]):
+        for k in range(self.pars["numerical"]["max_iter"]):
             # Solve the displacement problem
             time_u_start = time.perf_counter()
             self.subproblems["u"].solve()
             time_u = time.perf_counter() - time_u_start
             # Perform displacement relaxiation
             if relaxation:
-                u.vector[:] = u_old.vector[:] + omega * (u.vector[:] - u_old.vector[:])
+                u.x.array[:] = u_old.x.array + omega * (u.x.array[:] - u_old.x.array[:])
                 u.vector.assemble()
             # Solve the crack phase problem
             time_alpha_start = time.perf_counter()
@@ -164,16 +168,25 @@ class FractureProblem(BaseProblem):
                 alpha.vector[:] = alpha_old.vector[:] + omega_bar * dalpha
                 alpha.vector.assemble()
                 print(f"Crack phase relaxation: f{omega_bar[0]}")
-            # Check error (L2)
-            error = np.max(alpha.vector[:] - alpha_old.vector[:])
-            # Update alpha_old
-            alpha.vector.copy(alpha_old.vector)
-            # Display information
-            self.monitor(t, error, time_u, time_alpha)
+            # Check errors (L2)
+            error_u = np.max(np.abs(u.x.array - u_old.x.array))
+            error_a = np.max(np.abs(alpha.x.array - alpha_old.x.array))
             # Check convergence
-            if error <= self.pars["numerical"]["atol"]:
+            converged = (
+                error_u <= self.pars["numerical"]["utol"]
+                and error_a <= self.pars["numerical"]["atol"]
+            )
+            # Display information
+            self.monitor(k, self.subproblems["u"].l, error_u, error_a, time_u, time_alpha)
+            # Update old fields
+            u_old.x.array[:] = u.x.array
+            u_old.x.scatter_forward()
+            alpha_old.x.array[:] = alpha.x.array
+            alpha_old.x.scatter_forward()
+            # Stop to iterate if the calculation is converged
+            if converged:
                 break
         else:
             raise RuntimeError(
-                f"Could not converge after {t:3d} iteration, error {error:3.4e}"
+                f"Could not converge after {k:3d} iteration, error {error:3.4e}"
             )
