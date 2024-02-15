@@ -190,5 +190,5 @@ class FractureProblem(BaseProblem):
                 break
         else:
             raise RuntimeError(
-                f"Could not converge after {k:3d} iteration, error {error:3.4e}"
+                f"Could not converge after {k:3d} iteration, error_u {error_u:3.4e}, error_a {error_a:3.4e}"
             )
