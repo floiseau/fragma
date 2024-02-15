@@ -315,8 +315,10 @@ class DisplacementSubProblem:
         t : float
             Time parameter.
         """
+        # Update the load factor
+        self.l = t
         # Update boundary conditions
-        self.update_boundary_conditions(t)
+        self.update_boundary_conditions(self.l)
 
     def solve(self):
         """Solve the displacement sub-problem."""
