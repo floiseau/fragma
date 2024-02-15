@@ -1,0 +1,42 @@
+[model]
+name = "elasticity"
+dim = 2
+2D_assumption = "plane_strain"
+
+[mesh]
+msh_file = "mesh.msh"
+
+[mesh.physical_groups]
+left  = 5
+right = 6
+
+[mechanical]
+E = 30e9
+nu = 0.0
+
+[loading]
+dt = 0.1
+
+[loading.u_imp_max]
+left_0 = 0
+left_1 = 0
+
+[loading.f_imp_max]
+right = [0.1, 0.0]
+
+[postprocess]
+# TODO fields = ["strain", "stress"]
+
+[postprocess.probes]
+displacement= [
+    [ 0, 0.5, 0],
+    [10, 0.5, 0],
+]
+
+# NOTE
+# The displacement along x at the left end can be computed theoreticaly:
+#       sig=E*eps where sig=F_x/S and eps=u_x/L_x.
+# Thus,
+#       u_x=F_x*L_c/(E*S),
+# where: F=0.1, L=10, E=30*10^9, S=1.
+# It gives: u_x=3.3333...*10^{-11}.

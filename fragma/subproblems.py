@@ -7,6 +7,7 @@ This module provides classes for defining sub-problems that solve for displaceme
 import numpy as np
 from petsc4py import PETSc
 
+import dolfinx
 from dolfinx import fem, default_scalar_type
 from dolfinx.fem.petsc import LinearProblem
 import ufl
@@ -90,8 +91,12 @@ class DisplacementSubProblem:
         model : BaseModel
             The material model used in the simulation.
         """
-        # Store the displacement increments
+        # Initialize the load factor
+        self.l = 0.0
+        # Store the displacement loading
         self.u_imp_max = pars["loading"]["u_imp_max"]
+        # Store the force loading
+        self.f_imp_max = pars["loading"]["f_imp_max"]
         # Initialize the boundary conditions
         bcs_u = self.initialize_boundary_conditions(pars, domain, state)
         # Define the linear problem
@@ -208,20 +213,20 @@ class DisplacementSubProblem:
         print("\n████ INITIALIZE DISPLACEMENT BOUNDARY CONDITIONS")
         # Create variables to store bcs and loading functions
         bcs_u = []
-        self.load_funcs = {}
-        # Iterage through the displacement increments
-        for facet_name, u_inc in self.u_imp_max.items():
+        self.bcu_funcs = {}
+        # Iterage through the displacement loadings
+        for facet_name, u_imp in self.u_imp_max.items():
             # Get the component number
             comp = int(facet_name.split("_")[-1])
             # Define an FEM function (to control the BC)
-            self.load_funcs[facet_name] = fem.Function(V_u.sub(comp).collapse()[0])
+            self.bcu_funcs[facet_name] = fem.Function(V_u.sub(comp).collapse()[0])
             # Update the load
-            with self.load_funcs[facet_name].vector.localForm() as bc_local:
-                bc_local.set(u_inc)
+            with self.bcu_funcs[facet_name].vector.localForm() as bc_local:
+                bc_local.set(u_imp)
             # Add the boundary conditions to the list
             bcs_u.append(
                 fem.dirichletbc(
-                    self.load_funcs[facet_name], boundary_dofs[facet_name], V_u
+                    self.bcu_funcs[facet_name], boundary_dofs[facet_name], V_u
                 )
             )
         return bcs_u
@@ -237,11 +242,76 @@ class DisplacementSubProblem:
         t : float
             Current time.
         """
-        # Iterate through the load functions
-        for facet_name, load_func in self.load_funcs.items():
+        # Iterate through the displacement load functions
+        for facet_name, load_func in self.bcu_funcs.items():
             # Update the load function
             with load_func.vector.localForm() as bc_local:
                 bc_local.set(default_scalar_type(t * self.u_imp_max[facet_name]))
+        # Iterate through the force load functions
+        for facet_name, f_imp in self.f_imp_max.items():
+            self.bcf_funcs[facet_name].value = t*np.array(f_imp)
+
+    def compute_external_work(self, domain, state):
+        """
+        Compute the external work on the system.
+
+        This method calculates the external work done on the system due to applied forces.
+        It iterates through the boundary facets and computes the work done by each force.
+        The total external work is obtained by summing up the work contributions from all the boundary facets.
+
+        Parameters
+        ----------
+        domain : Domain
+            The domain object representing the computational domain.
+        state : dict
+            Dictionary containing state variables.
+
+        Returns
+        -------
+        ufl.Form
+            The external work done on the system.
+
+        Notes
+        -----
+        This method computes the external work by integrating the dot product of the applied forces
+        and the displacement over the boundary facets of the domain.
+
+        Examples
+        --------
+        >>> external_work = compute_external_work(domain, state)
+        """
+        # Get the state variable
+        u = state["u"]
+        # Get boundary facets
+        boundary_facets = domain.boundary_facets
+        # Get the integrands
+        dx = ufl.Measure("dx", domain=domain.mesh)
+        # Initialize the external work
+        external_work = 0*dx
+        # Initialize functions
+        self.bcf_funcs = {}
+        # Iterate through the forces
+        for facet_name, f_imp in self.f_imp_max.items():
+            # Get the facets tags
+            facet = boundary_facets[facet_name]
+            facet_tags = dolfinx.mesh.meshtags(
+                    domain.mesh,
+                    domain.mesh.geometry.dim-1,
+                    facet,
+                    np.full_like(facet, 1, dtype=np.int32))
+            # Create the load function
+            f = fem.Constant(domain.mesh, f_imp)
+            self.bcf_funcs[facet_name] = f
+            # Get the associated integrand
+            ds = ufl.Measure(
+                    "ds",
+                    domain=domain.mesh,
+                    subdomain_data=facet_tags,
+                    subdomain_id=1,
+                    )
+            # Add the cohtribution to the external work
+            external_work += ufl.dot(f, u) * ds
+        return external_work
 
     def define_problem(self, domain, state, model, bcs_u):
         """
@@ -268,8 +338,9 @@ class DisplacementSubProblem:
         V_u = u.function_space
         # Define the energy
         energy = model.energy(state, domain)
+        external_work = self.compute_external_work(domain, state)
         # Derivative of the energy with respect to displacement to obtain the linear problem to determine the stationary point
-        E_u = ufl.derivative(energy, u, ufl.TestFunction(V_u))
+        E_u = ufl.derivative(energy - external_work, u, ufl.TestFunction(V_u))
         E_du = ufl.replace(E_u, {u: ufl.TrialFunction(V_u)})
         # Define the displacement problem
         problem_u = LinearProblem(
