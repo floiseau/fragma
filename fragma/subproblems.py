@@ -94,9 +94,9 @@ class DisplacementSubProblem:
         # Initialize the load factor
         self.l = 0.0
         # Store the displacement loading
-        self.u_imp_max = pars["loading"]["u_imp_max"]
+        self.u_imp_max = pars["loading"].get("u_imp_max", {})
         # Store the force loading
-        self.f_imp_max = pars["loading"]["f_imp_max"]
+        self.f_imp_max = pars["loading"].get("f_imp_max", {})
         # Initialize the boundary conditions
         bcs_u = self.initialize_boundary_conditions(pars, domain, state)
         # Define the linear problem
@@ -284,10 +284,16 @@ class DisplacementSubProblem:
         u = state["u"]
         # Get boundary facets
         boundary_facets = domain.boundary_facets
-        # Get the integrands
-        dx = ufl.Measure("dx", domain=domain.mesh)
-        # Initialize the external work
-        external_work = 0 * dx
+        # If there are not external forces
+        if not self.f_imp_max:
+            # Get the integrands
+            ds = ufl.Measure("ds", domain=domain.mesh)
+            # Initialize the external work
+            T = fem.Constant(domain.mesh, [0.0] * domain.mesh.geometry.dim)
+            # Return a null external work
+            return ufl.dot(T, u) * ds
+        # Otherwise initialize the external work
+        external_work = 0.0
         # Initialize functions
         self.bcf_funcs = {}
         # Iterate through the forces
@@ -337,11 +343,13 @@ class DisplacementSubProblem:
         u = state["u"]
         # Get the function spaces
         V_u = u.function_space
-        # Define the energy
+        # Define the total energy
         energy = model.energy(state, domain)
         external_work = self.compute_external_work(domain, state)
+        if external_work:
+            energy -= external_work
         # Derivative of the energy with respect to displacement to obtain the linear problem to determine the stationary point
-        E_u = ufl.derivative(energy - external_work, u, ufl.TestFunction(V_u))
+        E_u = ufl.derivative(energy, u, ufl.TestFunction(V_u))
         E_du = ufl.replace(E_u, {u: ufl.TrialFunction(V_u)})
         # Define the displacement problem
         problem_u = LinearProblem(
