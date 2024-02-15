@@ -157,17 +157,12 @@ class ElasticModel(BaseModel):
         # Get the integrands
         dx = ufl.Measure("dx", domain=mesh)
         ds = ufl.Measure("ds", domain=mesh)
-        # Define the imposed stress on the remaining of the boundary
-        T = fem.Constant(mesh, default_scalar_type([0 for d in range(dim)]))
-        # Define the volumic forces
-        f = fem.Constant(mesh, default_scalar_type([0 for d in range(dim)]))
         # Get state variables
         u = state["u"]
         # Define the energy terms
         elastic_energy = 0.5 * ufl.inner(self.sig(state), self.eps(state)) * dx
-        external_work = ufl.dot(f, u) * dx + ufl.dot(T, u) * ds
         # Define the total energy
-        return elastic_energy - external_work
+        return elastic_energy
 
 
 class FractureModel(BaseModel):
@@ -365,10 +360,6 @@ class FractureModel(BaseModel):
         # Get the integrands
         dx = ufl.Measure("dx", domain=mesh)
         ds = ufl.Measure("ds", domain=mesh)
-        # Define the imposed stress on the remaining of the boundary
-        T = fem.Constant(mesh, default_scalar_type([0 for d in range(dim)]))
-        # Define the volumic forces
-        f = fem.Constant(mesh, default_scalar_type([0 for d in range(dim)]))
         # Get state variables
         u, alpha = state["u"], state["alpha"]
         # Get the fracture parameters
@@ -396,6 +387,5 @@ class FractureModel(BaseModel):
             )
             * dx
         )
-        external_work = ufl.dot(f, u) * dx + ufl.dot(T, u) * ds
         # Define the total energy
-        return elastic_energy + dissipated_energy - external_work
+        return elastic_energy + dissipated_energy
