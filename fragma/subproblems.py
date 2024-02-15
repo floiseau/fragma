@@ -279,8 +279,8 @@ class DisplacementSubProblem:
             u=u,
             petsc_options={
                 "ksp_type": "cg",
-                "ksp_rtol": 1e-8,
-                "ksp_atol": 1e-10,
+                "ksp_rtol": 1e-12,
+                "ksp_atol": 1e-12,
                 "ksp_max_it": 1000,
                 "pc_type": "gamg",
                 "pc_gamg_agg_nsmooths": 1,
@@ -296,6 +296,8 @@ class DisplacementSubProblem:
         ns = build_elasticity_nullspace(V_u)
         problem_u.A.setNearNullSpace(ns)
         problem_u.A.setOption(PETSc.Mat.Option.SPD, True)  # type: ignore
+        # Set block size
+        problem_u.A.setBlockSize(V_u.mesh.geometry.dim)
         # Display information about the displacement solver
         problem_u.solver.view()
         # Store the problem
@@ -364,7 +366,7 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         # Constraint-specific initialization
         if self.constraint == "max_strain_inc":
             # Get the first load factor increment
-            self.dl0 = pars["loading"]["dl0"]
+            self.l0 = pars["loading"]["l0"]
             # Set the maximal increment of strain
             self.dtau = pars["loading"]["dtau"]
             # Generate a function space for strain-like scalars
@@ -394,51 +396,16 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         bcs_u : list
             List of boundary conditions for displacement.
         """
-        print("\n████ DEFINITION OF THE PARTITIONED DISPLACEMENT PROBLEM")
-        # Get the state variables
-        u = state["u"]
-        self.u = u
-        # Get the function spaces
-        V_u = u.function_space
-        # Create the previous displacement
-        self.u_km1 = fem.Function(V_u, name="PreviousDisplacement")
-        self.u_km1.x.array[:] = u.x.array[:]
-        # Define the energy
-        energy = model.energy(state, domain)
-        # Derivative of the energy with respect to displacement to obtain the linear problem to determine the stationary point
-        E_u = ufl.derivative(
-            energy - ufl.dot(u, self.u_km1) * ufl.dx, u, ufl.TestFunction(V_u)
-        )
-        E_du = ufl.replace(E_u, {u: ufl.TrialFunction(V_u)})
-        # Define the displacement problem
-        problem_u = LinearProblem(
-            a=ufl.lhs(E_du),
-            L=ufl.rhs(E_du),
-            bcs=bcs_u,
-            u=None,
-            petsc_options={
-                "ksp_type": "cg",
-                "ksp_rtol": 1e-8,
-                "ksp_atol": 1e-10,
-                "ksp_max_it": 1000,
-                "pc_type": "gamg",
-                "pc_gamg_agg_nsmooths": 1,
-                "pc_gamg_esteig_ksp_type": "cg",
-            },
-            # petsc_options={
-            #     "ksp_type": "preonly",
-            #     "pc_type": "lu",
-            #     "pc_factor_solver_type": "mumps",
-            # },
-        )
-        # Define the null space (optimization with GAMG PC)
-        ns = build_elasticity_nullspace(V_u)
-        problem_u.A.setNearNullSpace(ns)
-        problem_u.A.setOption(PETSc.Mat.Option.SPD, True)  # type: ignore
-        # Display information about the displacement solver
-        problem_u.solver.view()
-        # Store the problem
-        self.problem_u = problem_u
+        # Store the displacement state variable
+        self.u = state["u"]
+        # Create the displacement at previous load step
+        self.u0 = self.u.copy()
+        # Define displacement functions
+        self.ui = self.u.copy()
+        self.u1 = self.u.copy()
+        self.u2 = self.u.copy()
+        # Define the problem using the parent class
+        super().define_problem(domain, {"u": self.ui, "alpha": state["alpha"]}, model, bcs_u)
 
     def update(self, t: float):
         """
@@ -454,7 +421,8 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         # Reset the iteration counter
         self.k = 1
         # Store the displacement at the beginning of load step
-        self.u0 = self.u.copy()
+        self.u0.x.array[:] = self.u.x.array
+        self.u0.x.scatter_forward()
         # Check the constraint
         if self.constraint == "max_strain_inc":
             # Compute the normalized strain from previous load steps
@@ -465,58 +433,58 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
             )
             self.eps0_normed = fem.Function(self.V_eps, name="NormedStrain")
             self.eps0_normed.interpolate(eps0_normed_expr)
-            # Store the previous strain for element selection
-            eps0_expr = fem.Expression(eps0, self.V_eps.element.interpolation_points())
-            self.eps0 = fem.Function(self.V_eps, name="PreviousStrain")
-            self.eps0.interpolate(eps0_expr)
 
     def solve(self):
         """Solve the partitioned displacement subproblem."""
-        # Update previous displacement
-        self.u_km1.x.array[:] = self.u.x.array[:]
         # Set boundary conditions to 0
         self.update_boundary_conditions(0.0)
         # Get the displacement increment
-        du = self.problem_u.solve()
-        du1 = du.copy()
+        self.problem_u.solve()
+        self.ui.vector.copy(self.u1.vector)
         # Set boundary conditions to 1
         self.update_boundary_conditions(1.0)
         # Get the displacement increment
-        du = self.problem_u.solve()
-        du2 = du.copy()
+        self.problem_u.solve()
+        self.ui.vector.copy(self.u2.vector)
         # Computation of the incremement of load factor
         match self.constraint:
             case "time":
                 # Set the increment of load factor equal to dt
-                dl = self.dt if self.t > 0 else 0.0
+                self.l = self.t
             case "max_strain_inc":
                 if self.t > 0:
                     # Compute the load factor increment for each element
-                    deps1 = self.model.eps({"u": self.u - self.u0 + du1})
-                    deps2 = self.model.eps({"u": du2})
-                    a0 = ufl.inner(self.eps0_normed, deps1)
-                    a1 = ufl.inner(self.eps0_normed, deps2)
-                    dlambdas_expr = fem.Expression(
-                        (self.dtau - a0) / a1,
+                    deps1 = self.model.eps({"u": self.u1 - self.u0})
+                    deps2 = self.model.eps({"u": self.u2})
+                    a0_expr = fem.Expression(
+                        ufl.inner(self.eps0_normed, deps1),
                         self.V_eps_scal.element.interpolation_points(),
                     )
-                    dlambdas = fem.Function(self.V_eps_scal, name="dlambdas")
-                    dlambdas.interpolate(dlambdas_expr)
-                    # Select the critical element (with max strain
-                    idx = np.argmax(self.eps0.x.array[:])
-                    print(f"   | Max strain element    : {idx}")
-                    # Get the
-                    dl = dlambdas.x.array[idx]
+                    a0 = fem.Function(self.V_eps_scal, name="a0")
+                    a0.interpolate(a0_expr)
+                    a1_expr = fem.Expression(
+                        ufl.inner(self.eps0_normed, deps2),
+                        self.V_eps_scal.element.interpolation_points(),
+                    )
+                    a1 = fem.Function(self.V_eps_scal, name="a1")
+                    a1.interpolate(a1_expr)
+                    lambdas = (self.dtau - a0.x.array) / a1.x.array
+                    # Choose the load factor using nested interval
+                    a1_inf_0 = a1.x.array <= 0
+                    a1_sup_0 = a1.x.array > 0
+                    l_max = np.min(lambdas[a1_sup_0]) if any(a1_sup_0) else  float("inf")
+                    l_min = np.max(lambdas[a1_inf_0]) if any(a1_inf_0) else -float("inf")
+                    # Check if the interval is valid
+                    if l_max < l_min:
+                        raise RuntimeError(f"The maximal increment of load factor is inferior the the minimal (min: {l_min:.3g}, max: {l_max:.3g}.)")
+                    # Choose the load factor as the upper bound 
+                    self.l = l_max
                 else:
                     # Arbitary load factor increment at first load step
-                    dl = self.dl0 if self.k == 1 else 0.0
-        # Increment the load factor
-        self.l += dl
-        # Display the load factor increment
-        print(f"   | Load factor increment : {dl:.4g}")
-        print(f"   | Load factor           : {self.l:.4g}")
+                    self.l = self.l0
         # Update the displacement
-        self.u.x.array[:] += du1.x.array[:] + dl * du2.x.array[:]
+        self.u.x.array[:] = self.u1.x.array + self.l * self.u2.x.array
+        self.u.x.scatter_forward()
         # Increment the iteration counter
         self.k += 1
 
@@ -597,22 +565,18 @@ class CrackPhaseSubProblem:
         # Initialize the jacobian
         J = fem.petsc.create_matrix(fem.form(snes_problem_alpha.a))
 
-        # Create Newton solver
+        # Create the nonlinear solver
         problem_alpha = PETSc.SNES().create()
         problem_alpha.setType("vinewtonrsls")
         problem_alpha.setFunction(snes_problem_alpha.F, b)
         problem_alpha.setJacobian(snes_problem_alpha.J, J)
-        problem_alpha.setTolerances(atol=1e-9, rtol=1.0e-9, max_it=50)
+        problem_alpha.setTolerances(atol=1e-12, rtol=1e-12, max_it=50)
 
-        problem_alpha.getKSP().setType("preonly")
-        problem_alpha.getKSP().setTolerances(rtol=1.0e-9)
-        problem_alpha.getKSP().getPC().setType("lu")
-        problem_alpha.getKSP().getPC().setFactorSolverType("mumps")
-        # TODO Optimize the crack phase solver
-        # problem_alpha.getKSP().setType("gmres")
-        # problem_alpha.getKSP().setTolerances(rtol=1.0e-9)
-        # problem_alpha.getKSP().getPC().setType("mg")
-        # problem_alpha.getKSP().getPC().setMGLevels(1)
+        # Set the KSP
+        problem_alpha.getKSP().setType("gmres")
+        problem_alpha.getKSP().setTolerances(atol=1e-15, rtol=1e-15)
+        problem_alpha.getKSP().getPC().setType("mg")
+        problem_alpha.getKSP().getPC().setMGLevels(1)
 
         # Define lower and upper bounds functions for the crack phase field
         self.alpha_lb = fem.Function(V_alpha, name="Lower bound")
@@ -720,3 +684,4 @@ class CrackPhaseSubProblem:
     def solve(self):
         """Solve the crack phase sub-problem."""
         self.problem_alpha.solve(None, self.alpha.vector)
+        self.alpha.x.scatter_forward()
