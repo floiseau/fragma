@@ -351,7 +351,7 @@ class DisplacementSubProblem:
             # Compute the normal
             n = ufl.FacetNormal(domain.mesh)
             # Compute the pressure
-            P = 4/(np.pi*L*D) * ufl.dot(F, n)
+            P = 4 / (np.pi * L * D) * ufl.dot(F, n)
             # Add the cohtribution to the external work
             external_work += P * ufl.dot(n, u) * ds
         return external_work
