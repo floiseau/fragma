@@ -189,17 +189,28 @@ class FractureModel(BaseModel):
         super().__init__(pars)
         # Get the degradation model
         self.deg_model = pars["model"]["model"]
-        # Get fracture parameters
-        self.Gc = pars["mechanical"]["Gc"]
-        self.ell = pars["mechanical"]["ell"]
-        self.aG = pars["mechanical"]["aG"] if "aG" in pars["mechanical"] else 0
-        self.theta_0 = (
-            np.deg2rad(pars["mechanical"]["theta_0"])
-            if "theta_0" in pars["mechanical"]
-            else 0
-        )
         # Get the residual crack phase
         self.alpha_res = pars["numerical"]["alpha_res"]
+        # Get fracture parameters
+        self.ell = pars["mechanical"]["ell"]
+        # Check for anisotropy
+        self.is_anisotropic = "theta_0" in pars["mechanical"]
+        if not self.is_anisotropic:
+            # Get the critical energy release rate
+            self.Gc = pars["mechanical"]["Gc"]
+        else:
+            # Get the critical energy release rate (min and max)
+            Gc_min = pars["mechanical"]["Gc_min"]
+            Gc_max = pars["mechanical"]["Gc_max"]
+            # Convert to other model parameters
+            self.Gc = np.sqrt(1 / 2 * (Gc_min**2 + Gc_max**2))
+            self.aG = 1 / 2 * (Gc_max**2 - Gc_min**2) / self.Gc**2
+            # Ge the anisotropy angle
+            self.theta_0 = (
+                np.deg2rad(pars["mechanical"]["theta_0"])
+                if "theta_0" in pars["mechanical"]
+                else 0
+            )
 
     def a(self, alpha):
         """
@@ -366,15 +377,19 @@ class FractureModel(BaseModel):
         Gc, ell = self.Gc, self.ell
         cw = self.cw()
         # Compute the anisotropy matrix
-        aG, theta_0 = self.aG, self.theta_0
         A_np = np.eye(dim)
-        if aG != 0:
+        # Add the higher order terms if the model is anisotropic
+        if self.is_anisotropic:
+            # Get the parameters
+            aG, theta_0 = self.aG, self.theta_0
+            #  Compute the 2nd order term of the anisotropy tensor
             A_np += aG * np.array(
                 [
                     [np.cos(2 * theta_0), np.sin(2 * theta_0)],
                     [np.sin(2 * theta_0), -np.cos(2 * theta_0)],
                 ]
             )
+        # Create an FEM constant for the anisotropy matrix
         A = fem.Constant(mesh, A_np)
         # Define the energy terms
         elastic_energy = 0.5 * ufl.inner(self.sig_eff(state), self.eps(state)) * dx
