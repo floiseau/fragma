@@ -29,16 +29,18 @@ class Exporter:
         List of functions to export.
     probes : dict
         Dictionary containing probe information.
+    reaction_forces: dict
+        Dictionnary containing the value of the reaction forces.
 
     Attributes
     ----------
     field_exporter : VTKFieldExporter
         Field exporter object.
-    probe_exporter : ProbeExporter
-        Probe exporter object.
+    scalar_exporter : ScalarExporter
+        Scalar exporter object.
     """
 
-    def __init__(self, mesh, functions_to_export, probes):
+    def __init__(self, mesh, functions_to_export, probes, reaction_forces):
         """
         Initialize the Exporter.
 
@@ -59,7 +61,7 @@ class Exporter:
             mesh, functions_to_export, results_folder
         )
         # Create the probe exporter
-        self.probe_exporter = ProbeExporter(probes, results_folder)
+        self.scalar_exporter = ScalarExporter(probes, reaction_forces, results_folder)
 
     def export(self, t):
         """
@@ -74,8 +76,8 @@ class Exporter:
         """
         # Run the field exporter
         self.field_exporter.export(t)
-        # Run the probe exporter
-        self.probe_exporter.export(t)
+        # Run the scalar exporter
+        self.scalar_exporter.export(t)
 
     def end(self):
         """Finalize exporting.
@@ -83,7 +85,7 @@ class Exporter:
         This method finalizes the export process by closing any open files.
         """
         # End the probe exporter
-        self.probe_exporter.end()
+        self.scalar_exporter.end()
         # End the field exporter
         self.field_exporter.end()
 
@@ -164,16 +166,18 @@ class VTKFieldExporter:
             file.close()
 
 
-class ProbeExporter:
+class ScalarExporter:
     """
-    Class for exporting probe data to CSV files.
+    Class for exporting scalar data to CSV files.
 
-    This class exports probe data to CSV files.
+    This class exports scalar data to CSV files.
 
     Parameters
     ----------
     probes : dict
         Dictionary containing probes for simulation results.
+    reaction_forces: dict
+        Dictionary containing the reaction forces.
     results_folder : Path
         Path to the folder where results will be stored.
 
@@ -181,37 +185,47 @@ class ProbeExporter:
     ----------
     probes : dict
         Dictionary containing probes for simulation results.
+    reaction_forces: dict
+        Dictionary containing the reaction forces.
     csv_file : file
         CSV file for storing probe data.
     writer : csv.writer
         CSV writer object.
     """
 
-    def __init__(self, probes, results_folder: Path):
+    def __init__(self, probes, reaction_forces, results_folder: Path):
         """
-        Initialize the ProbeExporter.
+        Initialize the ScalarExporter.
 
         Parameters
         ----------
         probes : dict
             Dictionary containing probes for simulation results.
+        reaction_forces: dict
+            Dictionary containing the reaction forces.
         results_folder : Path
             Path to the folder where results will be stored.
         """
         # Store the probes
         self.probes = probes
+        # Store the reaction forces
+        self.reaction_forces = reaction_forces
         # Generate the CSV file
         self.csv_file = open(results_folder / "probes.csv", "w")
         # Create the csv writer
         self.writer = csv.writer(self.csv_file)
         # Write the header
         header = []
+        # Add the probes
         for func_name, probe in probes.items():
             # Iterate through the probes of the function
             for i, x in enumerate(probe.xs):
                 for comp, val in enumerate(probe.vals[i]):
                     # Set the name of the row
                     header.append(f"{func_name} {comp+1} {x}")
+        # Add the reaction forces
+        for name, reaction_force in reaction_forces.items():
+            header.append(name)
         # Write the header
         self.writer.writerow(header)
 
@@ -226,7 +240,7 @@ class ProbeExporter:
         t : float
             Current time.
         """
-        # Write the header
+        # Write the row
         row = []
         for func_name, probe in self.probes.items():
             # Iterate through the probes of the function
@@ -234,6 +248,9 @@ class ProbeExporter:
                 for val in probe.vals[i]:
                     # Add the value to the row
                     row.append(val)
+        # Add the reaction forces
+        for name, reaction_force in self.reaction_forces.items():
+            row.append(reaction_force)
         # Write the row
         self.writer.writerow(row)
 

@@ -87,6 +87,22 @@ class BaseModel:
         # Compute the stess
         return la * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2.0 * mu * self.eps(state)
 
+    def sig_eff(self, state):
+        """
+        Compute the effective stress tensor.
+
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing state variables.
+
+        Returns
+        -------
+        ufl.form.Expression
+            Effective stress tensor.
+        """
+        return self.sig(state)
+
     def energy(self, state, mesh):
         """
         Compute the energy.
@@ -159,7 +175,7 @@ class ElasticModel(BaseModel):
         # Get state variables
         u = state["u"]
         # Define the energy terms
-        elastic_energy = 0.5 * ufl.inner(self.sig(state), self.eps(state)) * dx
+        elastic_energy = 0.5 * ufl.inner(self.sig_eff(state), self.eps(state)) * dx
         # Define the total energy
         return elastic_energy
 
