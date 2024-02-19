@@ -2,7 +2,7 @@
 name = "fracture"
 dim = 2
 2D_assumption = "plane_stress"
-model = "AT1"
+model = "AT2"
 
 [mesh]
 msh_file = "mesh.msh"
@@ -31,7 +31,5 @@ ell = 0.1
 dt = 0.02
 
 [loading.u_imp_max]
-bot_0 = 0
-bot_1 = -2.5e-3
-top_0 = 0
-top_1 =  2.5e-3
+bot = [0, -2.5e-3]
+top = [0,  2.5e-3]

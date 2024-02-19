@@ -34,10 +34,8 @@ theta_0 = 45
 dt = 0.02
 
 [loading.u_imp_max]
-bot_0 = 0
-bot_1 = 0
-top_0 = 0
-top_1 = 5e-4
+bot = [0, 0]
+top = [0, 5e-4]
 
 [postprocess.probes]
 displacement= [

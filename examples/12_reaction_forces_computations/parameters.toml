@@ -18,10 +18,8 @@ nu = 0.00
 dt = 0.1
 
 [loading.u_imp_max]
-left_0 = 0
-left_1 = 0
-right_0 = 0.1
-right_1 = 0
+left = [0, 0]
+right = [0.1, 0]
 
 [postprocess]
 # TODO fields = ["strain", "stress"]
