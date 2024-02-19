@@ -68,7 +68,10 @@ class BaseProblem:
             self.postprocessor.funcs.values()
         )
         probes = self.postprocessor.probes
-        self.exporter = Exporter(self.domain.mesh, functions_to_export, probes)
+        reaction_forces = self.postprocessor.reaction_forces
+        self.exporter = Exporter(
+            self.domain.mesh, functions_to_export, probes, reaction_forces
+        )
 
     def define_state_variables(self):
         """
