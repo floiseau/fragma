@@ -253,6 +253,8 @@ class ScalarExporter:
             row.append(reaction_force)
         # Write the row
         self.writer.writerow(row)
+        # Flush the results
+        self.csv_file.flush()
 
     def end(self):
         """
