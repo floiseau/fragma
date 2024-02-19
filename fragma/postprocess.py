@@ -4,8 +4,11 @@ Module for post-processing utilities.
 This module provides classes and functions for post-processing simulation results.
 """
 
-from dolfinx import fem, geometry
+import dolfinx
+from dolfinx import geometry, fem
 import ufl
+
+import numpy as np
 
 
 class PostProcessor:
@@ -48,10 +51,10 @@ class PostProcessor:
         self.__initialize_strain(domain.mesh, model, state)
         # Initialize stress export
         self.__initialize_stress(domain.mesh, model, state)
-        # Initialize the probes
-        self.__initialize_stress(domain.mesh, model, state)
         # Initialize probes dict
         self.__initialize_probes(domain.mesh, state, postprocess_pars)
+        # Initialize the reaction forces
+        self.__initialize_reaction_forces(domain, model, state, postprocess_pars)
 
     def __initialize_strain(self, mesh, model, state):
         """
@@ -93,7 +96,7 @@ class PostProcessor:
             Dictionary containing state variables.
         """
         # Compute the stress from ufl
-        sig_ufl = model.sig(state)
+        sig_ufl = model.sig_eff(state)
         # Generate FEM space for stress
         sig_elem = ufl.TensorElement("DG", mesh.ufl_cell(), 0, shape=sig_ufl.ufl_shape)
         V_sig = fem.FunctionSpace(mesh, sig_elem)
@@ -132,6 +135,62 @@ class PostProcessor:
                 state["u"], displacement_probes_pos, mesh
             )
 
+    def __initialize_reaction_forces(self, domain, model, state, postprocess_pars):
+        """
+        Initialize probes.
+
+        Parameters
+        ----------
+        mesh : dolfinx.Mesh
+            The mesh representing the domain.
+        state : dict
+            Dictionary containing state variables.
+        postprocess_pars : dict
+            Dictionary containing parameters for post-processing.
+        """
+        # Get the dimension of the mesh
+        dim = domain.mesh.geometry.dim
+        # Get the surfaces on which to compute the reaction forces
+        surfaces = postprocess_pars["reaction_forces"]
+        # Get the boundary facets from the domain
+        boundary_facets = domain.boundary_facets
+        # Compute the stress from ufl
+        sig_ufl = model.sig_eff(state)
+        # Initialize the dictionary of reaction forces expressions
+        self.reaction_forces_expr = {}
+        self.reaction_forces = {}
+        # Get the normals
+        n = ufl.FacetNormal(domain.mesh)
+        # Iterate through the surfaces
+        for facet_name in surfaces:
+            # Get the facets tags
+            facet = boundary_facets[facet_name]
+            facet_tags = dolfinx.mesh.meshtags(
+                domain.mesh,
+                domain.mesh.geometry.dim - 1,
+                facet,
+                np.full_like(facet, 1, dtype=np.int32),
+            )
+            # Get the associated integrand
+            ds = ufl.Measure(
+                "ds",
+                domain=domain.mesh,
+                subdomain_data=facet_tags,
+                subdomain_id=1,
+            )
+            # Add the cohtribution to the external work
+            for comp in range(dim):
+                # Elementary vector
+                elem_vec_np = np.zeros((dim,))
+                elem_vec_np[comp] = 1
+                elem_vec = fem.Constant(domain.mesh, elem_vec_np)
+                # Set the expression of the reaction force along direction "comp"
+                expr = ufl.dot(ufl.dot(sig_ufl, n), elem_vec) * ds
+                self.reaction_forces_expr[f"F_{comp+1} ({facet_name})"] = expr
+                self.reaction_forces[
+                    f"F_{comp+1} ({facet_name})"
+                ] = fem.assemble_scalar(dolfinx.fem.form(expr))
+
     def postprocess(self):
         """
         Perform post-processing.
@@ -144,6 +203,9 @@ class PostProcessor:
         # Update the displacement probes values
         for probe in self.probes.values():
             probe.update()
+        # Update the reaction forces
+        for name, expr in self.reaction_forces_expr.items():
+            self.reaction_forces[name] = fem.assemble_scalar(dolfinx.fem.form(expr))
 
 
 class Probes:
