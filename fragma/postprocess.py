@@ -151,7 +151,7 @@ class PostProcessor:
         # Get the dimension of the mesh
         dim = domain.mesh.geometry.dim
         # Get the surfaces on which to compute the reaction forces
-        surfaces = postprocess_pars["reaction_forces"]
+        surfaces = postprocess_pars.get("reaction_forces", {})
         # Get the boundary facets from the domain
         boundary_facets = domain.boundary_facets
         # Compute the stress from ufl

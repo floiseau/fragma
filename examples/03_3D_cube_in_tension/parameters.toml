@@ -17,10 +17,6 @@ nu = 0.3
 dt = 0.1
 
 [loading.u_imp_max]
-bot_0 = 0
-bot_1 = 0
-bot_2 = 0
-top_0 = 0
-top_1 = 1e-3
-top_2 = 0
+bot = [0, 0, 0]
+top = [0, 1e-3, 0]
 

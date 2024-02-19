@@ -29,8 +29,7 @@ dt = 0.01
 
 [loading.u_imp_max]
 # Clamp
-bot_0 =  0.0
-bot_1 =  0.0
+bot = [0, 0]
 # Top
-top_1 = 2e-3
+top = [nan, 2e-3]
 

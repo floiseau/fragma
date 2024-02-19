@@ -12,19 +12,18 @@ right = 6
 
 [mechanical]
 E = 30e9
-nu = 0.3
+nu = 0.0
 
 [loading]
 dt = 0.05
-constraint = "max_strain_inc"
-l0 = 0.01
-dtau = 1e-3
+constraint = "time"
+# constraint = "max_strain_inc"
+# l0 = 0.01
+# dtau = 1e-3
 
 [loading.u_imp_max]
-left_0 = 0
-left_1 = 0
-right_0 = 0.1
-right_1 = 0
+left = [0, 0]
+right = [0.1, 0]
 
 [postprocess.probes]
 displacement= [

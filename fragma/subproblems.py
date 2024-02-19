@@ -3,6 +3,7 @@ Module for defining sub-problems related to displacement and crack phase evoluti
 
 This module provides classes for defining sub-problems that solve for displacement and crack phase evolution.
 """
+from math import isnan
 
 import numpy as np
 from petsc4py import PETSc
@@ -218,19 +219,28 @@ class DisplacementSubProblem:
         self.bcu_funcs = {}
         # Iterage through the displacement loadings
         for facet_name, u_imp in self.u_imp_max.items():
-            # Get the component number
-            comp = int(facet_name.split("_")[-1])
-            # Define an FEM function (to control the BC)
-            self.bcu_funcs[facet_name] = fem.Function(V_u.sub(comp).collapse()[0])
-            # Update the load
-            with self.bcu_funcs[facet_name].vector.localForm() as bc_local:
-                bc_local.set(u_imp)
-            # Add the boundary conditions to the list
-            bcs_u.append(
-                fem.dirichletbc(
-                    self.bcu_funcs[facet_name], boundary_dofs[facet_name], V_u
+            # Create a subdict for each components
+            self.bcu_funcs[facet_name] = {}
+            # Iterate through the axis
+            for comp in range(dim):
+                # Check if the DOF is imposed
+                if isnan(self.u_imp_max[facet_name][comp]):
+                    continue
+                # Define an FEM function (to control the BC)
+                self.bcu_funcs[facet_name][comp] = fem.Function(
+                    V_u.sub(comp).collapse()[0]
                 )
-            )
+                # Update the load
+                with self.bcu_funcs[facet_name][comp].vector.localForm() as bc_local:
+                    bc_local.set(u_imp[comp])
+                # Add the boundary conditions to the list
+                bcs_u.append(
+                    fem.dirichletbc(
+                        self.bcu_funcs[facet_name][comp],
+                        boundary_dofs[f"{facet_name}_{comp}"],
+                        V_u,
+                    )
+                )
         return bcs_u
 
     def update_boundary_conditions(self, t: float):
@@ -245,10 +255,17 @@ class DisplacementSubProblem:
             Current time.
         """
         # Iterate through the displacement load functions
-        for facet_name, load_func in self.bcu_funcs.items():
-            # Update the load function
-            with load_func.vector.localForm() as bc_local:
-                bc_local.set(default_scalar_type(t * self.u_imp_max[facet_name]))
+        for facet_name, load_dict in self.bcu_funcs.items():
+            # Iterate through the axis
+            for comp, load_func in load_dict.items():
+                # Check if the DOF is imposed
+                if isnan(self.u_imp_max[facet_name][comp]):
+                    continue
+                # Update the load function
+                with load_func.vector.localForm() as bc_local:
+                    bc_local.set(
+                        default_scalar_type(t * self.u_imp_max[facet_name][comp])
+                    )
         # Iterate through the force load functions
         for facet_name, f_imp in self.f_imp_max.items():
             self.bcf_funcs[facet_name].value = t * np.array(f_imp)
