@@ -1,4 +1,6 @@
 import numpy as np
+import sympy as sp
+
 
 from dolfinx import fem, default_scalar_type
 import ufl
@@ -400,7 +402,8 @@ class FractureModel(ElasticModel):
         # Get state variables
         alpha = state["alpha"]
         # Get the fracture parameters
-        Gc, ell = self.Gc, self.ell
+        Gc = self.parse_parameter(self.Gc, alpha.function_space)
+        ell = self.ell
         cw = self.cw()
         # Compute the anisotropy matrix
         A_np = np.eye(domain.mesh.geometry.dim)
@@ -451,3 +454,43 @@ class FractureModel(ElasticModel):
         dissipated_energy = self.fracture_dissipation(state, domain)
         # Define the total energy
         return elastic_energy + dissipated_energy
+
+    def parse_parameter(self, par, V_par):
+        """
+        Parse the given parameter.
+
+        If the parameter is a number (integer or float), returns the raw number.
+        Otherwise, it interprets the parameter as a mathematical expression,
+        parses it using SymPy, and creates a finite element function representing
+        the parsed expression on the given function space.
+
+        Parameters
+        ----------
+        par : int, float, or sympy.Expr
+            The parameter to parse. If it's a number, it will be returned as is.
+            If it's a SymPy expression, it will be parsed and represented as a
+            finite element function.
+        V_par : dolfinx.FunctionSpace
+            The function space on which to interpolate the parsed parameter.
+
+        Returns
+        -------
+        par_value : int, float, or dolfinx.Function
+            The parsed parameter. If the parameter is a number, it will be returned
+            as is. If it's a SymPy expression, it will be represented as a finite
+            element function.
+        """
+        # Check if the parameter is a number
+        if isinstance(par, (int, float)):
+            # Return the parameter as is
+            return par
+        else:
+            # Declare the coordinate symbol
+            x = sp.Symbol("x")
+            # Parse the expression using sympy
+            par_lambda = sp.utilities.lambdify(x, par, "numpy")
+            # Create the fem function
+            par_func = fem.Function(V_par)
+            par_func.interpolate(par_lambda)
+            # Return the fem function
+            return par_func
