@@ -25,6 +25,7 @@ right = [0.1, 0.0]
 
 [postprocess]
 # TODO fields = ["strain", "stress"]
+reaction_forces = ["left", "right"]
 
 [postprocess.probes]
 displacement= [

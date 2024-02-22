@@ -67,10 +67,11 @@ class BaseProblem:
         functions_to_export = list(self.state.values()) + list(
             self.postprocessor.funcs.values()
         )
+        energies = self.postprocessor.energies
         probes = self.postprocessor.probes
         reaction_forces = self.postprocessor.reaction_forces
         self.exporter = Exporter(
-            self.domain.mesh, functions_to_export, probes, reaction_forces
+            self.domain.mesh, functions_to_export, energies, probes, reaction_forces
         )
 
     def define_state_variables(self):

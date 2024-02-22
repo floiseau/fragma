@@ -150,7 +150,7 @@ class ElasticModel(BaseModel):
         # Initialise parent class
         super().__init__(pars)
 
-    def energy(self, state, domain):
+    def elastic_energy(self, state, domain):
         """
         Compute the elastic energy.
 
@@ -166,21 +166,34 @@ class ElasticModel(BaseModel):
         ufl.form.Expression
             Elastic energy.
         """
-        # Get the mesh
-        mesh = domain.mesh
-        # Get the dimension of the mesh
-        dim = mesh.geometry.dim
         # Get the integrands
-        dx = ufl.Measure("dx", domain=mesh)
-        # Get state variables
-        u = state["u"]
+        dx = ufl.Measure("dx", domain=domain.mesh)
+        # Define the total energy
+        return 1 / 2 * ufl.inner(self.sig_eff(state), self.eps(state)) * dx
+
+    def energy(self, state, domain):
+        """
+        Compute the total energy.
+
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing state variables.
+        domain : Domain
+            The domain object representing the computational domain.
+
+        Returns
+        -------
+        ufl.form.Expression
+            Total energy.
+        """
         # Define the energy terms
-        elastic_energy = 0.5 * ufl.inner(self.sig_eff(state), self.eps(state)) * dx
+        elastic_energy = self.elastic_energy(state, domain)
         # Define the total energy
         return elastic_energy
 
 
-class FractureModel(BaseModel):
+class FractureModel(ElasticModel):
     """
     Material model for fracture mechanics.
 
@@ -365,6 +378,58 @@ class FractureModel(BaseModel):
         """
         return self.a(state["alpha"]) * self.sig(state)
 
+    def fracture_dissipation(self, state, domain):
+        """
+        Compute the energy dissipated by fracture.
+
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing state variables.
+        domain : Domain
+            The domain object representing the computational domain.
+
+        Returns
+        -------
+        ufl.form.Expression
+            Energy dissipated by fracture.
+
+        """
+        # Get the integrands
+        dx = ufl.Measure("dx", domain=domain.mesh)
+        # Get state variables
+        alpha = state["alpha"]
+        # Get the fracture parameters
+        Gc, ell = self.Gc, self.ell
+        cw = self.cw()
+        # Compute the anisotropy matrix
+        A_np = np.eye(domain.mesh.geometry.dim)
+        # Add the higher order terms if the model is anisotropic
+        if self.is_anisotropic:
+            # Get the parameters
+            aG, theta_0 = self.aG, self.theta_0
+            #  Compute the 2nd order term of the anisotropy tensor
+            A_np += aG * np.array(
+                [
+                    [np.cos(2 * theta_0), np.sin(2 * theta_0)],
+                    [np.sin(2 * theta_0), -np.cos(2 * theta_0)],
+                ]
+            )
+        # Create an FEM constant for the anisotropy matrix
+        A = fem.Constant(domain.mesh, A_np)
+        # Define the energy terms
+        dissipated_energy = (
+            Gc
+            / cw
+            * (
+                self.w(alpha) / ell
+                + ell * ufl.dot(ufl.grad(alpha), A * ufl.grad(alpha))
+            )
+            * dx
+        )
+        # Define the total energy
+        return dissipated_energy
+
     def energy(self, state, domain):
         """
         Compute the energy.
@@ -381,42 +446,8 @@ class FractureModel(BaseModel):
         ufl.form.Expression
             Total energy.
         """
-        # Get the mesh from the domain
-        mesh = domain.mesh
-        # Get the dimension of the mesh
-        dim = mesh.geometry.dim
-        # Get the integrands
-        dx = ufl.Measure("dx", domain=mesh)
-        # Get state variables
-        u, alpha = state["u"], state["alpha"]
-        # Get the fracture parameters
-        Gc, ell = self.Gc, self.ell
-        cw = self.cw()
-        # Compute the anisotropy matrix
-        A_np = np.eye(dim)
-        # Add the higher order terms if the model is anisotropic
-        if self.is_anisotropic:
-            # Get the parameters
-            aG, theta_0 = self.aG, self.theta_0
-            #  Compute the 2nd order term of the anisotropy tensor
-            A_np += aG * np.array(
-                [
-                    [np.cos(2 * theta_0), np.sin(2 * theta_0)],
-                    [np.sin(2 * theta_0), -np.cos(2 * theta_0)],
-                ]
-            )
-        # Create an FEM constant for the anisotropy matrix
-        A = fem.Constant(mesh, A_np)
         # Define the energy terms
-        elastic_energy = 0.5 * ufl.inner(self.sig_eff(state), self.eps(state)) * dx
-        dissipated_energy = (
-            Gc
-            / cw
-            * (
-                self.w(alpha) / ell
-                + ell * ufl.dot(ufl.grad(alpha), A * ufl.grad(alpha))
-            )
-            * dx
-        )
+        elastic_energy = self.elastic_energy(state, domain)
+        dissipated_energy = self.fracture_dissipation(state, domain)
         # Define the total energy
         return elastic_energy + dissipated_energy

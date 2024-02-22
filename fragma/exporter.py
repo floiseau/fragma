@@ -7,7 +7,7 @@ This module provides functionality to export simulation results.
 Classes:
     Exporter: Class for exporting simulation results.
     VTKFieldExporter: Class for exporting field data to VTK files.
-    ProbeExporter: Class for exporting probe data to CSV files.
+    ScalarExporter: Class for exporting scalar data to CSV files.
 """
 import csv
 from pathlib import Path
@@ -19,7 +19,7 @@ class Exporter:
     """
     Class for exporting simulation results.
 
-    This class manages exporting simulation results, including field data and probe data.
+    This class manages exporting simulation results, including field data and scalar data (energies, displacement probes, and forces).
 
     Parameters
     ----------
@@ -27,6 +27,8 @@ class Exporter:
         The mesh used in the simulation.
     functions_to_export : list of dolfinx.Function
         List of functions to export.
+    energies : dict
+        Dictionary containing the energy values.
     probes : dict
         Dictionary containing probe information.
     reaction_forces: dict
@@ -40,7 +42,7 @@ class Exporter:
         Scalar exporter object.
     """
 
-    def __init__(self, mesh, functions_to_export, probes, reaction_forces):
+    def __init__(self, mesh, functions_to_export, energies, probes, reaction_forces):
         """
         Initialize the Exporter.
 
@@ -61,7 +63,7 @@ class Exporter:
             mesh, functions_to_export, results_folder
         )
         # Create the probe exporter
-        self.scalar_exporter = ScalarExporter(probes, reaction_forces, results_folder)
+        self.scalar_exporter = ScalarExporter(energies, probes, reaction_forces, results_folder)
 
     def export(self, t):
         """
@@ -193,12 +195,14 @@ class ScalarExporter:
         CSV writer object.
     """
 
-    def __init__(self, probes, reaction_forces, results_folder: Path):
+    def __init__(self, energies, probes, reaction_forces, results_folder: Path):
         """
         Initialize the ScalarExporter.
 
         Parameters
         ----------
+        energies : dict
+            Dictionary containing energies from simulation results.
         probes : dict
             Dictionary containing probes for simulation results.
         reaction_forces: dict
@@ -206,16 +210,19 @@ class ScalarExporter:
         results_folder : Path
             Path to the folder where results will be stored.
         """
-        # Store the probes
+        # Store the dictionaries for scalar quantities
+        self.energies = energies
         self.probes = probes
-        # Store the reaction forces
         self.reaction_forces = reaction_forces
         # Generate the CSV file
         self.csv_file = open(results_folder / "probes.csv", "w")
         # Create the csv writer
         self.writer = csv.writer(self.csv_file)
-        # Write the header
+        # Initialize the header
         header = []
+        # Add the energies
+        for name, energy in energies.items():
+            header.append(name)
         # Add the probes
         for func_name, probe in probes.items():
             # Iterate through the probes of the function
@@ -240,8 +247,12 @@ class ScalarExporter:
         t : float
             Current time.
         """
-        # Write the row
+        # Initialize the row
         row = []
+        # Add the energies
+        for name, energy in self.energies.items():
+            row.append(energy)
+        # Add the probes
         for func_name, probe in self.probes.items():
             # Iterate through the probes of the function
             for i, _ in enumerate(probe.xs):
