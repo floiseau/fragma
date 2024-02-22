@@ -63,7 +63,9 @@ class Exporter:
             mesh, functions_to_export, results_folder
         )
         # Create the probe exporter
-        self.scalar_exporter = ScalarExporter(energies, probes, reaction_forces, results_folder)
+        self.scalar_exporter = ScalarExporter(
+            energies, probes, reaction_forces, results_folder
+        )
 
     def export(self, t):
         """

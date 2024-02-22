@@ -1,0 +1,40 @@
+[model]
+name = "fracture"
+dim = 2
+2D_assumption = "plane_stress"
+model = "AT2"
+
+[mesh]
+msh_file = "mesh.msh"
+
+[mesh.physical_groups]
+bot = 37
+top = 38
+crack = 39
+non-crackable_1 = 37
+non-crackable_2 = 38
+
+[numerical]
+utol = 1e-6
+atol = 1e-5
+max_iter = 1000
+alpha_res = 1e-12
+# omega = 1.5
+
+[mechanical]
+E = 3e9
+nu = 0.4
+Gc = "380*(1+2*x[0]*x[1])"
+ell = 0.1
+
+[loading]
+dt = 0.01
+constraint = "max_strain_inc"
+dtau = 5e-3
+l0 = 0.001
+end_criterion = "elastic_energy_drop"
+
+
+[loading.u_imp_max]
+bot = [0, -5e-4]
+top = [0,  5e-4]
