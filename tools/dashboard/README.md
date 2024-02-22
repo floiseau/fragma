@@ -1,18 +1,32 @@
 # Dashboard for fragma
 
 ## Description
-This tool is using the `bokeh` module to generate an HTML dashboard to monitor `fragma` simulations.
+This tool generates an HTML dashboard using the dash module (which uses plotly) to monitor fragma simulations.
 
-## How to use
-To use this dashboard, one need to activate `fragma` environment (with the optional `bokeh` dependency) and start the `bokeh` server.
-This must be done at the root of the simulation directory.
-```shell
+## Dependencies
+To use the dashboard, ensure that the dash package is installed in the `fragma` Conda environment. You can install it using the following command:
+```bash
 conda activate fragma
-bokeh serve --show /path/to/fragma/tools/dashboard/fragma_dashboard.py
+conda install dash
 ```
-This command should automatically open the dashboard in your default web browser.
-You can also open using the address shown in the terminal, as show below.
-```shell
-2024-02-22 11:42:18,382 Bokeh app running at: http://localhost:5006/fragma_dashboard
+
+## Usage
+1. Activate the fragma environment (including the optional dash dependency) using the following command:
+```bash
+conda activate fragma
 ```
-Different usage tips are shown in the dashboard.
+2. Start the Dash server by running the following command in the simulation directory:
+```bash
+python /path/to/fragma/tools/dashboard/tools/dashboard/fragma_dashboard.py
+```
+3. This command should start the Dash dashboard and display the following message in the command line:
+```
+Dash is running on http://127.0.0.1:8050/
+
+ * Serving Flask app 'test_plotly'
+ * Debug mode
+```
+4. Open a web browser and navigate to the following address to access the dashboard: http://127.0.0.1:8050/.
+
+## Notes
+- The dashboard provides various usage tips and instructions within the dashboard interface.
