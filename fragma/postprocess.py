@@ -55,6 +55,8 @@ class PostProcessor:
         self.__initialize_probes(domain.mesh, state, postprocess_pars)
         # Initialize the reaction forces
         self.__initialize_reaction_forces(domain, model, state, postprocess_pars)
+        # Initialize the energies computations
+        self.__initialize_energies(domain, model, state)
 
     def __initialize_strain(self, mesh, model, state):
         """
@@ -137,12 +139,14 @@ class PostProcessor:
 
     def __initialize_reaction_forces(self, domain, model, state, postprocess_pars):
         """
-        Initialize probes.
+        Initialize computation of reaction forces.
 
         Parameters
         ----------
-        mesh : dolfinx.Mesh
-            The mesh representing the domain.
+        domain : Domain
+            The domain containing the mesh and boundaries.
+        model : Model
+            The model containing the mathematical material model.
         state : dict
             Dictionary containing state variables.
         postprocess_pars : dict
@@ -186,10 +190,43 @@ class PostProcessor:
                 elem_vec = fem.Constant(domain.mesh, elem_vec_np)
                 # Set the expression of the reaction force along direction "comp"
                 expr = ufl.dot(ufl.dot(sig_ufl, n), elem_vec) * ds
-                self.reaction_forces_expr[f"F_{comp+1} ({facet_name})"] = expr
-                self.reaction_forces[
-                    f"F_{comp+1} ({facet_name})"
-                ] = fem.assemble_scalar(dolfinx.fem.form(expr))
+                # Store the expression
+                name = f"F_{comp+1} ({facet_name})"
+                self.reaction_forces_expr[name] = expr
+                self.reaction_forces[name] = fem.assemble_scalar(dolfinx.fem.form(expr))
+
+    def __initialize_energies(self, domain, model, state):
+        """
+        Initialize the computation of the energies.
+
+        Parameters
+        ----------
+        mesh : dolfinx.Mesh
+            The mesh representing the domain.
+        state : dict
+            Dictionary containing state variables.
+        postprocess_pars : dict
+            Dictionary containing parameters for post-processing.
+        """
+        # Initialize the energy dictionary
+        self.energies_expr = {}
+        # Get the stored energies from the model
+        if hasattr(model, "elastic_energy"):
+            self.energies_expr["elastic_energy"] = model.elastic_energy(state, domain)
+        if hasattr(model, "fracture_dissipation"):
+            self.energies_expr["fracture_dissipation"] = model.fracture_dissipation(
+                state, domain
+            )
+        # Computate of the external work
+        u = state["u"]
+        sig_ufl = model.sig_eff(state)
+        n = ufl.FacetNormal(domain.mesh)
+        ds = ufl.Measure("ds", domain=domain.mesh)
+        self.energies_expr["external_work"] = ufl.dot(ufl.dot(sig_ufl, n), u) * ds
+        # Initialize the values
+        self.energies = {}
+        for name, expr in self.energies_expr.items():
+            self.energies[name] = fem.assemble_scalar(dolfinx.fem.form(expr))
 
     def postprocess(self):
         """
@@ -206,7 +243,9 @@ class PostProcessor:
         # Update the reaction forces
         for name, expr in self.reaction_forces_expr.items():
             self.reaction_forces[name] = fem.assemble_scalar(dolfinx.fem.form(expr))
-
+        # Update the energies
+        for name, expr in self.energies_expr.items():
+            self.energies[name] = fem.assemble_scalar(dolfinx.fem.form(expr))
 
 class Probes:
     """
