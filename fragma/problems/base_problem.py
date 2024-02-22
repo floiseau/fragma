@@ -14,6 +14,7 @@ from domain import Domain
 from steppers import ProportionalTimeStepper
 from exporter import Exporter
 from postprocess import PostProcessor
+from endchecker import choose_end_checker
 
 
 class BaseProblem:
@@ -34,6 +35,8 @@ class BaseProblem:
         Exporter for saving simulation results.
     stepper : ProportionalTimeStepper
         Time stepper for time integration during simulation.
+    end_checker : EndChecker
+        End checker to checker if the simulation must end.
     """
 
     def __init__(self, pars):
@@ -73,6 +76,12 @@ class BaseProblem:
         self.exporter = Exporter(
             self.domain.mesh, functions_to_export, energies, probes, reaction_forces
         )
+        # Initialize the time stepper
+        dt = self.pars["loading"]["dt"]
+        self.stepper = ProportionalTimeStepper(dt)
+        # Initialize the end checker
+        end_criterion = self.pars["loading"].get("end_criterion", "t")
+        self.end_checker = choose_end_checker(end_criterion, self.stepper, self.postprocessor)
 
     def define_state_variables(self):
         """
@@ -111,9 +120,7 @@ class BaseProblem:
         Solve the problem over time.
         """
         print("\n████ RESOLUTION")
-        # Initialize the time stepper
-        self.stepper = ProportionalTimeStepper(self.pars["loading"]["dt"])
-        while self.stepper.not_end():
+        while not self.end_checker.end():
             # Get time
             t = self.stepper.t
             # Display information
