@@ -2,6 +2,7 @@
 Module providing utilities for choosing and initializing end checkers for simulations.
 """
 
+
 def choose_end_checker(end_criterion, time_stepper, postprocessor):
     """
     Choose and initialize the end checker.
@@ -32,9 +33,9 @@ def choose_end_checker(end_criterion, time_stepper, postprocessor):
             return ElasticEnergyDropEndChecker(postprocessor)
         case _:
             raise RuntimeError(f"The end criterion '{end_criterion}' does not exists.")
-    
 
-class TimeEndChecker():
+
+class TimeEndChecker:
     """
     Class for checking if the end of the simulation is reached based on time.
     With this end checker, the end of the simulation is reached when the time reaches 1.
@@ -69,7 +70,7 @@ class TimeEndChecker():
         return self.time_stepper.t > 1.0 + 1e-12
 
 
-class ElasticEnergyDropEndChecker():
+class ElasticEnergyDropEndChecker:
     """
     Class for checking if the end of the simulation is reached based on elastic energy drop.
     With this end checker, the end of the simulation is reached when elastic energy reaches 1% of its maximum value.
@@ -108,7 +109,8 @@ class ElasticEnergyDropEndChecker():
         # Get the current elastic energy
         current_elastic_energy = self.postprocessor.energies["elastic_energy"]
         # Update the maximum elastic energy
-        self.maximum_elastic_energy = max(self.maximum_elastic_energy, current_elastic_energy)
+        self.maximum_elastic_energy = max(
+            self.maximum_elastic_energy, current_elastic_energy
+        )
         # Check if the current elastic energy is less than 1% of the maximum elastic energy
         return current_elastic_energy < 0.01 * self.maximum_elastic_energy
-

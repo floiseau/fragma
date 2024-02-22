@@ -81,7 +81,9 @@ class BaseProblem:
         self.stepper = ProportionalTimeStepper(dt)
         # Initialize the end checker
         end_criterion = self.pars["loading"].get("end_criterion", "t")
-        self.end_checker = choose_end_checker(end_criterion, self.stepper, self.postprocessor)
+        self.end_checker = choose_end_checker(
+            end_criterion, self.stepper, self.postprocessor
+        )
 
     def define_state_variables(self):
         """

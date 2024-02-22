@@ -247,6 +247,7 @@ class PostProcessor:
         for name, expr in self.energies_expr.items():
             self.energies[name] = fem.assemble_scalar(dolfinx.fem.form(expr))
 
+
 class Probes:
     """
     Class to evaluate a function at specified points.
