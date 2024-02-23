@@ -93,7 +93,7 @@ def update_scatter_plot(x_name, y_names, n_clicks):
             line=dict(width=1),
         )
 
-    # Update the layout
+    # Add axis labels
     fig.update_layout(xaxis_title=x_name, yaxis_title="")
 
     # Show the grid
@@ -101,6 +101,7 @@ def update_scatter_plot(x_name, y_names, n_clicks):
         showgrid=True,
         gridcolor="lightgrey",
         ticks="outside",
+        exponentformat="power",
         showline=True,
         linecolor="black",
         mirror=True,
@@ -109,6 +110,7 @@ def update_scatter_plot(x_name, y_names, n_clicks):
         showgrid=True,
         gridcolor="lightgrey",
         ticks="outside",
+        exponentformat="power",
         showline=True,
         linecolor="black",
         mirror=True,
