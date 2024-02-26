@@ -15,16 +15,16 @@ E = 30e9
 nu = 0.00
 
 [loading]
-dt = 0.1
-
 [loading.u_imp_max]
 left = [0, 0]
 right = [0.1, 0]
 
-[postprocess]
-# TODO fields = ["strain", "stress"]
-reaction_forces = ["left", "right"]
+[end]
+criterion = "t"
+t_max = 10
 
+[postprocess]
+reaction_forces = ["left", "right"]
 [postprocess.probes]
 displacement= [
     [ 0, 0.5, 0],

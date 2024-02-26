@@ -77,12 +77,11 @@ class BaseProblem:
             self.domain.mesh, functions_to_export, energies, probes, reaction_forces
         )
         # Initialize the time stepper
-        dt = self.pars["loading"]["dt"]
-        self.stepper = ProportionalTimeStepper(dt)
+        self.stepper = ProportionalTimeStepper()
         # Initialize the end checker
-        end_criterion = self.pars["loading"].get("end_criterion", "t")
+        end_pars = self.pars["end"]
         self.end_checker = choose_end_checker(
-            end_criterion, self.stepper, self.postprocessor
+            end_pars, self.stepper, self.postprocessor
         )
 
     def define_state_variables(self):

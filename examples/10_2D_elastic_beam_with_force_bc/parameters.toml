@@ -5,7 +5,6 @@ dim = 2
 
 [mesh]
 msh_file = "mesh.msh"
-
 [mesh.physical_groups]
 left  = 5
 right = 6
@@ -16,17 +15,18 @@ nu = 0.0
 
 [loading]
 dt = 0.1
-
 [loading.u_imp_max]
 left = [0, 0]
-
 [loading.f_imp_max]
 right = [0.1, 0.0]
+
+[end]
+criterion = "t"
+t_max = 10
 
 [postprocess]
 # TODO fields = ["strain", "stress"]
 reaction_forces = ["left", "right"]
-
 [postprocess.probes]
 displacement= [
     [ 0, 0.5, 0],

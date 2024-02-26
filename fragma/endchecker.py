@@ -3,14 +3,14 @@ Module providing utilities for choosing and initializing end checkers for simula
 """
 
 
-def choose_end_checker(end_criterion, time_stepper, postprocessor):
+def choose_end_checker(end_pars, time_stepper, postprocessor):
     """
     Choose and initialize the end checker.
 
     Parameters
     ----------
-    end_criterion : str
-        The criterion used to determine the end of the simulation.
+    end_criterion : dict
+        Parameters used to determine the end of the simulation.
     time_stepper : ProportionalTimeStepper
         Time stepper for time integration during simulation.
     postprocessor : PostProcessor
@@ -26,11 +26,13 @@ def choose_end_checker(end_criterion, time_stepper, postprocessor):
     RuntimeError
         If the specified end criterion does not exist.
     """
-    match end_criterion:
+    match end_pars["criterion"]:
         case "t":
-            return TimeEndChecker(time_stepper)
+            t_max = end_pars["t_max"]
+            return TimeEndChecker(time_stepper, t_max)
         case "elastic_energy_drop":
-            return ElasticEnergyDropEndChecker(postprocessor)
+            drop = end_pars["drop"]
+            return ElasticEnergyDropEndChecker(postprocessor, drop)
         case _:
             raise RuntimeError(f"The end criterion '{end_criterion}' does not exists.")
 
@@ -44,9 +46,11 @@ class TimeEndChecker:
     ----------
     stepper : ProportionalTimeStepper
         Time stepper for time integration during simulation.
+    stepper : int
+        Final time step.
     """
 
-    def __init__(self, time_stepper):
+    def __init__(self, time_stepper, t_max):
         """
         Initialize the EndChecker.
 
@@ -54,9 +58,13 @@ class TimeEndChecker:
         ----------
         time_stepper : ProportionalTimeStepper
             Time stepper for time integration during simulation.
+        stepper : int
+            Final time step.
         """
         # Store the time stepper
         self.time_stepper = time_stepper
+        # Store the final time step
+        self.t_max = t_max
 
     def end(self):
         """
@@ -67,13 +75,13 @@ class TimeEndChecker:
         bool
             True if the end time of the simulation is reached, False otherwise.
         """
-        return self.time_stepper.t > 1.0 + 1e-12
+        return self.time_stepper.t > self.t_max
 
 
 class ElasticEnergyDropEndChecker:
     """
     Class for checking if the end of the simulation is reached based on elastic energy drop.
-    With this end checker, the end of the simulation is reached when elastic energy reaches 1% of its maximum value.
+    With this end checker, the end of the simulation is reached when elastic energy reaches drop % of its maximum value.
 
     Attributes
     ----------
@@ -81,9 +89,11 @@ class ElasticEnergyDropEndChecker:
         Post-processor for analyzing simulation results.
     maximum_elastic_energy : float
         Maximum elastic energy encountered during the simulation.
+    drop : float
+        Drop coefficient.
     """
 
-    def __init__(self, postprocessor):
+    def __init__(self, postprocessor, drop):
         """
         Initialize the ElasticEnergyEndChecker.
 
@@ -91,9 +101,13 @@ class ElasticEnergyDropEndChecker:
         ----------
         postprocessor : PostProcessor
             Post-processor for analyzing simulation results.
+        drop : float
+            Drop coefficient.
         """
         # Store the post processor
         self.postprocessor = postprocessor
+        # Get the drop coefficient
+        self.drop = drop
         # Initiliaze the maximum elastic energy
         self.maximum_elastic_energy = 0
 
@@ -113,4 +127,4 @@ class ElasticEnergyDropEndChecker:
             self.maximum_elastic_energy, current_elastic_energy
         )
         # Check if the current elastic energy is less than 1% of the maximum elastic energy
-        return current_elastic_energy < 0.01 * self.maximum_elastic_energy
+        return current_elastic_energy < self.drop * self.maximum_elastic_energy

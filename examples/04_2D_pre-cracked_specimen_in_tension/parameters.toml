@@ -29,8 +29,6 @@ Gc = 1 # 4.5e3
 ell = 1e-3 # 0.06e-3
 
 [loading]
-dt = 0.01
-
 [loading.u_imp_max]
 # Clamp
 left_bot = [0.0, nan]
@@ -39,3 +37,6 @@ bot = [nan, -2e-6]
 # Top
 top = [nan,  2e-6]
 
+[end]
+criterion = "t"
+t_max = 100

@@ -28,13 +28,13 @@ Gc = "380*(1+2*x[0]*x[1])"
 ell = 0.1
 
 [loading]
-dt = 0.01
 constraint = "max_strain_inc"
 dtau = 5e-3
 l0 = 0.001
-end_criterion = "elastic_energy_drop"
-
-
 [loading.u_imp_max]
 bot = [0, -5e-4]
 top = [0,  5e-4]
+
+[end]
+criterion = "elastic_energy_drop"
+drop = 0.01

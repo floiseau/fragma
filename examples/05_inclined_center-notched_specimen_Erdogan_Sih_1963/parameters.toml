@@ -25,11 +25,12 @@ Gc = 380
 ell = 2e-3 # Real value 0.3e-3
 
 [loading]
-dt = 0.01
-
 [loading.u_imp_max]
 # Clamp
 bot = [0, 0]
 # Top
 top = [nan, 2e-3]
 
+[end]
+criterion = "t"
+t_max = 100

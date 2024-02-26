@@ -6,7 +6,6 @@ model = "AT2"
 
 [mesh]
 msh_file = "mesh.msh"
-
 [mesh.physical_groups]
 bot = 37
 top = 38
@@ -28,10 +27,12 @@ Gc = 380
 ell = 0.1
 
 [loading]
-dt = 0.02
-# end_criterion = "t"
-end_criterion = "elastic_energy_drop"
-
 [loading.u_imp_max]
 bot = [0, -2.5e-3]
 top = [0,  2.5e-3]
+
+[end]
+# end_criterion = "t"
+# t_max = 50
+end_criterion = "elastic_energy_drop"
+drop = 0.01
