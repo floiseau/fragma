@@ -31,11 +31,13 @@ Gc_max = 6845
 theta_0 = 45
 
 [loading]
-dt = 0.02
-
 [loading.u_imp_max]
 bot = [0, 0]
 top = [0, 5e-4]
+
+[end]
+criterion = "t"
+t_max = 50
 
 [postprocess.probes]
 displacement= [

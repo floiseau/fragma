@@ -28,8 +28,10 @@ Gc = 380
 ell = 10e-3
 
 [loading]
-dt = 0.004
-
 [loading.u_imp_max]
 bot_pin = [0, -2.5e-3]
 top_pin = [0,  2.5e-3]
+
+[end]
+criterion = "t"
+t_max = 250

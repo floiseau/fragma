@@ -1,13 +1,22 @@
 # End criterion
 
 This example is dedicated to the introduction of the end criteria.
-The end criterion is set in the `parameters.toml` file in the `loading` section.
+The end criterion is set in the `parameters.toml` file in the `end` section.
 
+Currrently, to end check are available.
+The first one is the time end checker.
 ```toml
-[loading]
-end_criterion = "elastic_energy_drop"
+[end]
+end_criterion = "t"
+t_max = 50
 ```
-Its value can be:
-- `"t"`, then the simulation ends when the time reaches 1,
-- `"elastic_energy_drop"`, then the simulation ends when the elastic energy reaches 1% of its maximum value during the simulation.
+In this case, the simulation stops after $50$ increments.
+
+The second one is the elastic energy drop checker.
+```toml
+[end]
+end_criterion = "elastic_energy_drop"
+drop = 0.01
+```
+With the elastic energy drop checker the simulation ends when the elastic energy reaches $\mathrm{drop}\,%$ of its maximum value during the simulation.
 

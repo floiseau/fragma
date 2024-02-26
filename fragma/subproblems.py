@@ -100,6 +100,9 @@ class DisplacementSubProblem:
         self.f_imp_max = pars["loading"].get("f_imp_max", {})
         # Store the contact force loading
         self.fc_max = pars["loading"].get("fc_max", {})
+        # Check if t_max is defined
+        if pars["end"]["criterion"] == "t":
+            self.t_max = pars["end"]["t_max"]
         # Initialize the boundary conditions
         bcs_u = self.initialize_boundary_conditions(pars, domain, state)
         # Define the linear problem
@@ -449,7 +452,7 @@ class DisplacementSubProblem:
             Time parameter.
         """
         # Update the load factor
-        self.l = t
+        self.l = t / self.t_max
         # Update boundary conditions
         self.update_boundary_conditions(self.l)
 
@@ -490,8 +493,9 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
             Model defining the problem's behavior.
         """
         super().__init__(pars, domain, state, model)
-        # Store the timestep increment
-        self.dt = pars["loading"]["dt"]
+        # Store the max load step
+        if pars["end"]["criterion"] == "t":
+            self.t_max = pars["end"]["t_max"]
         # Store the constraint
         self.constraint = pars["loading"]["constraint"]
         # Store the model
@@ -588,10 +592,10 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         # Computation of the incremement of load factor
         match self.constraint:
             case "time":
-                # Set the increment of load factor equal to dt
-                self.l = self.t
+                # Set the increment of load factor equal to t/t_max
+                self.l = self.t / self.t_max
             case "max_strain_inc":
-                if self.t > 0:
+                if self.t > 1:
                     # Compute the load factor increment for each element
                     deps1 = self.model.eps({"u": self.u1 - self.u0})
                     deps2 = self.model.eps({"u": self.u2})
@@ -622,9 +626,12 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                         )
                     # Choose the load factor as the upper bound
                     self.l = l_max
-                else:
+                elif self.t == 1:
                     # Arbitary load factor increment at first load step
                     self.l = self.l0
+                elif self.t == 0:
+                    # Arbitary load factor increment at first load step
+                    self.l = 0
         # Update the displacement
         self.u.x.array[:] = self.u1.x.array + self.l * self.u2.x.array
         self.u.x.scatter_forward()

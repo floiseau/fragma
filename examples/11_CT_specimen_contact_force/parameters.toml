@@ -28,11 +28,11 @@ Gc = 5000
 ell = 1.5e-3
 
 [loading]
-dt = 0.004
-
 [loading.u_imp_max]
-top_pin_0 = 0
-top_pin_1 = 0
-
+top_pin = [0, 0]
 [loading.fc_max]
 bot_pin = {F=[0.0, -5e6], D=8e-3, L=1}
+
+[end]
+criterion = "t"
+t_max = 250

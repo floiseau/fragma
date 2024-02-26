@@ -30,16 +30,17 @@ Gc = 4000
 ell = 1e-3
 
 [loading]
-dt = 0.01
 constraint = "max_strain_inc"
-dtau = 1e-1 # 1e-2
-l0 = 0.09
-
+dtau = 5e-2 # 1e-2
+l0 = 0.01
 [loading.u_imp_max]
 top_pin = [0, 0]
-
 [loading.f_imp_max]
 bot_pin = [0, -1e8]
+
+[end]
+criterion = "t"
+t_max = 100
 
 [postprocess]
 reaction_forces = ["bot_pin", "top_pin"]
