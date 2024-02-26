@@ -101,7 +101,7 @@ class DisplacementSubProblem:
         # Store the contact force loading
         self.fc_max = pars["loading"].get("fc_max", {})
         # Check if t_max is defined
-        if pars["end"]["criterion"] == "t":
+        if pars["end"]["t_max"]:
             self.t_max = pars["end"]["t_max"]
         # Initialize the boundary conditions
         bcs_u = self.initialize_boundary_conditions(pars, domain, state)
