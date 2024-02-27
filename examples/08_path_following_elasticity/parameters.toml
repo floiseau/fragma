@@ -15,10 +15,10 @@ E = 30e9
 nu = 0.0
 
 [loading]
-constraint = "time"
+constraint = "load_factor_inc"
 # constraint = "max_strain_inc"
-# l0 = 0.01
 # dtau = 1e-3
+dl = 0.05
 
 [loading.u_imp_max]
 left = [0, 0]
