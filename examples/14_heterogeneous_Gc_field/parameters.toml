@@ -30,7 +30,7 @@ ell = 0.1
 [loading]
 constraint = "max_strain_inc"
 dtau = 5e-3
-l0 = 0.001
+dl = 0.01
 [loading.u_imp_max]
 bot = [0, -5e-4]
 top = [0,  5e-4]
