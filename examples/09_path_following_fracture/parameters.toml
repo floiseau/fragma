@@ -31,8 +31,8 @@ ell = 1e-3
 
 [loading]
 constraint = "max_strain_inc"
-dtau = 5e-2 # 1e-2
-l0 = 0.01
+dtau = 2e-2 # 1e-2
+dl = 1e-2
 [loading.u_imp_max]
 top_pin = [0, 0]
 [loading.f_imp_max]

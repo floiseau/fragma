@@ -27,6 +27,7 @@ Gc = 380
 ell = 0.1
 
 [loading]
+dl = 0.01
 [loading.u_imp_max]
 bot = [0, -2.5e-3]
 top = [0,  2.5e-3]
@@ -34,5 +35,5 @@ top = [0,  2.5e-3]
 [end]
 # end_criterion = "t"
 # t_max = 50
-end_criterion = "elastic_energy_drop"
+criterion = "elastic_energy_drop"
 drop = 0.01

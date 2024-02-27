@@ -101,9 +101,11 @@ class DisplacementSubProblem:
         # Store the contact force loading
         self.fc_max = pars["loading"].get("fc_max", {})
         # Check if t_max is defined
-        if pars["end"].get("t_max", None):
-            self.t_max = pars["end"]["t_max"]
-        # Initialize the boundary conditions
+        if "dl" in pars["loading"]:
+            self.dl = pars["loading"]["dl"]
+        elif "t_max" in pars["end"]:
+            self.dl = 1/pars["end"]["t_max"]
+        # Initialize the boundary conitions
         bcs_u = self.initialize_boundary_conditions(pars, domain, state)
         # Define the linear problem
         self.define_problem(domain, state, model, bcs_u)
@@ -452,7 +454,7 @@ class DisplacementSubProblem:
             Time parameter.
         """
         # Update the load factor
-        self.l = t / self.t_max
+        self.l += self.dl if t>0 else 0
         # Update boundary conditions
         self.update_boundary_conditions(self.l)
 
@@ -493,9 +495,6 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
             Model defining the problem's behavior.
         """
         super().__init__(pars, domain, state, model)
-        # Store the max load step
-        if pars["end"]["criterion"] == "t":
-            self.t_max = pars["end"]["t_max"]
         # Store the constraint
         self.constraint = pars["loading"]["constraint"]
         # Store the model
@@ -503,20 +502,24 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         # Initialize the load factor
         self.l = 0.0
         # Constraint-specific initialization
-        if self.constraint == "max_strain_inc":
-            # Get the first load factor increment
-            self.l0 = pars["loading"]["l0"]
-            # Set the maximal increment of strain
-            self.dtau = pars["loading"]["dtau"]
-            # Generate a function space for strain-like scalars
-            eps_ufl = model.eps(state)
-            eps_elem = ufl.TensorElement(
-                "DG", domain.mesh.ufl_cell(), 0, shape=eps_ufl.ufl_shape
-            )
-            self.V_eps = fem.FunctionSpace(domain.mesh, eps_elem)
-            # Generate a function space for strain-like scalars
-            eps_scal_elem = ufl.FiniteElement("DG", domain.mesh.ufl_cell(), 0)
-            self.V_eps_scal = fem.FunctionSpace(domain.mesh, eps_scal_elem)
+        match self.constraint:
+            case "load_factor_inc":
+                # Get the load factor increment
+                self.dl = pars["loading"]["dl"]
+            case "max_strain_inc":
+                # Get the load factor increment in the initial phase
+                self.dl = pars["loading"]["dl"]
+                # Set the maximal increment of strain
+                self.dtau = pars["loading"]["dtau"]
+                # Generate a function space for strain-like scalars
+                eps_ufl = model.eps(state)
+                eps_elem = ufl.TensorElement(
+                    "DG", domain.mesh.ufl_cell(), 0, shape=eps_ufl.ufl_shape
+                )
+                self.V_eps = fem.FunctionSpace(domain.mesh, eps_elem)
+                # Generate a function space for strain-like scalars
+                eps_scal_elem = ufl.FiniteElement("DG", domain.mesh.ufl_cell(), 0)
+                self.V_eps_scal = fem.FunctionSpace(domain.mesh, eps_scal_elem)
 
     def define_problem(self, domain, state, model, bcs_u):
         """
@@ -563,6 +566,8 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         self.t = t
         # Reset the iteration counter
         self.k = 1
+        # Select the control equation for the current phase
+        self.control_eq = self.select_control_equation()
         # Store the displacement at the beginning of load step
         self.u0.x.array[:] = self.u.x.array
         self.u0.x.scatter_forward()
@@ -577,6 +582,44 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
             self.eps0_normed = fem.Function(self.V_eps, name="NormedStrain")
             self.eps0_normed.interpolate(eps0_normed_expr)
 
+    def select_control_equation(self):
+        """Select the control equation.
+
+        This method selects the load control equation based on the specified constraint
+        and the current phase of the simulation.
+
+        Returns
+        -------
+        str
+            The selected control equation.
+
+        Notes
+        -----
+        The control equation determines how the loading constraint is applied
+        during the simulation. The available control equations are:
+        - 'load_factor_inc': Increase the load factor incrementally.
+        - 'max_strain_inc': Increase the load factor to obtain a specific value of the maximum strain in the domain.
+        When choosing the 'max_strain_inc' constraint, the load factor increment is used when the displacements fields from the two last load steps are proportional.
+
+        """
+        match self.constraint:
+            case "load_factor_inc":
+                control_eq = "load_factor_inc"
+            case "max_strain_inc":
+                if self.t <= 1:
+                    control_eq = "load_factor_inc"
+                else:
+                    # Get the displacement fields from previous iterations
+                    u0 = self.u0.x.array.flatten()
+                    u = self.u.x.array.flatten()
+                    # Use the Pearson coefficient to check if the new displacement
+                    # field is proportional to the old one
+                    corr_coeff = np.corrcoef(u0, u)[0, 1]
+                    elasticity = np.isclose(corr_coeff, 1, rtol=0, atol=1e-9)
+                    control_eq = "max_strain_inc" if not elasticity else "load_factor_inc"
+        print(f"Control equation: {control_eq}")
+        return control_eq
+
     def solve(self):
         """Solve the partitioned displacement subproblem."""
         # Set boundary conditions to 0
@@ -590,10 +633,11 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         self.problem_u.solve()
         self.ui.vector.copy(self.u2.vector)
         # Computation of the incremement of load factor
-        match self.constraint:
-            case "time":
-                # Set the increment of load factor equal to t/t_max
-                self.l = self.t / self.t_max
+        match self.control_eq:
+            case "load_factor_inc":
+                if self.k == 1:
+                    # Increment the load factor
+                    self.l += self.dl
             case "max_strain_inc":
                 if self.t > 1:
                     # Compute the load factor increment for each element
@@ -626,12 +670,6 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                         )
                     # Choose the load factor as the upper bound
                     self.l = l_max
-                elif self.t == 1:
-                    # Arbitary load factor increment at first load step
-                    self.l = self.l0
-                elif self.t == 0:
-                    # Arbitary load factor increment at first load step
-                    self.l = 0
         # Update the displacement
         self.u.x.array[:] = self.u1.x.array + self.l * self.u2.x.array
         self.u.x.scatter_forward()
