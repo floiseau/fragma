@@ -70,11 +70,10 @@ class BaseProblem:
         functions_to_export = list(self.state.values()) + list(
             self.postprocessor.funcs.values()
         )
-        energies = self.postprocessor.energies
+        scalar_data = self.postprocessor.scalar_data
         probes = self.postprocessor.probes
-        reaction_forces = self.postprocessor.reaction_forces
         self.exporter = Exporter(
-            self.domain.mesh, functions_to_export, energies, probes, reaction_forces
+            self.domain.mesh, functions_to_export, scalar_data, probes
         )
         # Initialize the time stepper
         self.stepper = ProportionalTimeStepper()
