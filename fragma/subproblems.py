@@ -104,7 +104,7 @@ class DisplacementSubProblem:
         if "dl" in pars["loading"]:
             self.dl = pars["loading"]["dl"]
         elif "t_max" in pars["end"]:
-            self.dl = 1/pars["end"]["t_max"]
+            self.dl = 1 / pars["end"]["t_max"]
         # Initialize the boundary conitions
         bcs_u = self.initialize_boundary_conditions(pars, domain, state)
         # Define the linear problem
@@ -335,7 +335,7 @@ class DisplacementSubProblem:
                 np.full_like(facet, 1, dtype=np.int32),
             )
             # Create the load function
-            f = fem.Constant(domain.mesh, f_imp)
+            f = fem.Constant(domain.mesh, np.array(f_imp, dtype=default_scalar_type))
             self.bcf_funcs[facet_name] = f
             # Get the associated integrand
             ds = ufl.Measure(
@@ -454,7 +454,7 @@ class DisplacementSubProblem:
             Time parameter.
         """
         # Update the load factor
-        self.l += self.dl if t>0 else 0
+        self.l += self.dl if t > 0 else 0
         # Update boundary conditions
         self.update_boundary_conditions(self.l)
 
@@ -616,7 +616,9 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                     # field is proportional to the old one
                     corr_coeff = np.corrcoef(u0, u)[0, 1]
                     elasticity = np.isclose(corr_coeff, 1, rtol=0, atol=1e-9)
-                    control_eq = "max_strain_inc" if not elasticity else "load_factor_inc"
+                    control_eq = (
+                        "max_strain_inc" if not elasticity else "load_factor_inc"
+                    )
         print(f"Control equation: {control_eq}")
         return control_eq
 
