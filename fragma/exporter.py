@@ -27,12 +27,10 @@ class Exporter:
         The mesh used in the simulation.
     functions_to_export : list of dolfinx.Function
         List of functions to export.
-    energies : dict
-        Dictionary containing the energy values.
+    scalar_data: dict
+        Dictionary containing the scalar data to export (energies, reaction forces, ...).
     probes : dict
         Dictionary containing probe information.
-    reaction_forces: dict
-        Dictionnary containing the value of the reaction forces.
 
     Attributes
     ----------
@@ -42,7 +40,7 @@ class Exporter:
         Scalar exporter object.
     """
 
-    def __init__(self, mesh, functions_to_export, energies, probes, reaction_forces):
+    def __init__(self, mesh, functions_to_export, scalar_data, probes):
         """
         Initialize the Exporter.
 
@@ -52,6 +50,8 @@ class Exporter:
             The mesh used in the simulation.
         functions_to_export : list of dolfinx.Function
             List of functions to export.
+        scalar_data: dict
+            Dictionary containing the scalar data to export (energies, reaction forces, ...).
         probes : dict
             Dictionary containing probe information.
         """
@@ -63,9 +63,7 @@ class Exporter:
             mesh, functions_to_export, results_folder
         )
         # Create the probe exporter
-        self.scalar_exporter = ScalarExporter(
-            energies, probes, reaction_forces, results_folder
-        )
+        self.scalar_exporter = ScalarExporter(probes, scalar_data, results_folder)
 
     def export(self, t):
         """
@@ -180,8 +178,8 @@ class ScalarExporter:
     ----------
     probes : dict
         Dictionary containing probes for simulation results.
-    reaction_forces: dict
-        Dictionary containing the reaction forces.
+    scalar_data: dict
+        Dictionary containing the scalar data to export (energies, reaction forces, ...).
     results_folder : Path
         Path to the folder where results will be stored.
 
@@ -189,41 +187,38 @@ class ScalarExporter:
     ----------
     probes : dict
         Dictionary containing probes for simulation results.
-    reaction_forces: dict
-        Dictionary containing the reaction forces.
+    scalar_data: dict
+        Dictionary containing the scalar data to export (energies, reaction forces, ...).
     csv_file : file
         CSV file for storing probe data.
     writer : csv.writer
         CSV writer object.
     """
 
-    def __init__(self, energies, probes, reaction_forces, results_folder: Path):
+    def __init__(self, probes, scalar_data, results_folder: Path):
         """
         Initialize the ScalarExporter.
 
         Parameters
         ----------
-        energies : dict
-            Dictionary containing energies from simulation results.
         probes : dict
             Dictionary containing probes for simulation results.
-        reaction_forces: dict
-            Dictionary containing the reaction forces.
+        scalar_data: dict
+            Dictionary containing the scalar data to export (energies, reaction forces, ...).
         results_folder : Path
             Path to the folder where results will be stored.
         """
         # Store the dictionaries for scalar quantities
-        self.energies = energies
         self.probes = probes
-        self.reaction_forces = reaction_forces
+        self.scalar_data = scalar_data
         # Generate the CSV file
         self.csv_file = open(results_folder / "probes.csv", "w")
         # Create the csv writer
         self.writer = csv.writer(self.csv_file)
         # Initialize the header
         header = []
-        # Add the energies
-        for name, energy in energies.items():
+        # Add the scalar data
+        for name, _ in scalar_data.items():
             header.append(name)
         # Add the probes
         for func_name, probe in probes.items():
@@ -232,9 +227,6 @@ class ScalarExporter:
                 for comp, val in enumerate(probe.vals[i]):
                     # Set the name of the row
                     header.append(f"{func_name} {comp+1} {x}")
-        # Add the reaction forces
-        for name, reaction_force in reaction_forces.items():
-            header.append(name)
         # Write the header
         self.writer.writerow(header)
 
@@ -251,9 +243,9 @@ class ScalarExporter:
         """
         # Initialize the row
         row = []
-        # Add the energies
-        for name, energy in self.energies.items():
-            row.append(energy)
+        # Add the scalar data
+        for _, scalar in self.scalar_data.items():
+            row.append(scalar)
         # Add the probes
         for func_name, probe in self.probes.items():
             # Iterate through the probes of the function
@@ -261,9 +253,6 @@ class ScalarExporter:
                 for val in probe.vals[i]:
                     # Add the value to the row
                     row.append(val)
-        # Add the reaction forces
-        for name, reaction_force in self.reaction_forces.items():
-            row.append(reaction_force)
         # Write the row
         self.writer.writerow(row)
         # Flush the results

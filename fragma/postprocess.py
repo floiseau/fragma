@@ -5,7 +5,7 @@ This module provides classes and functions for post-processing simulation result
 """
 
 import dolfinx
-from dolfinx import geometry, fem
+from dolfinx import default_scalar_type, geometry, fem
 import ufl
 
 import numpy as np
@@ -47,6 +47,8 @@ class PostProcessor:
         # Initialize the post expressions and functions
         self.exprs = {}
         self.funcs = {}
+        # Initialize dictionary for scalar data
+        self.scalar_data = {}
         # Initialize strain export
         self.__initialize_strain(domain.mesh, model, state)
         # Initialize stress export
@@ -57,6 +59,8 @@ class PostProcessor:
         self.__initialize_reaction_forces(domain, model, state, postprocess_pars)
         # Initialize the energies computations
         self.__initialize_energies(domain, model, state)
+        # Initialize the energy release rate computation
+        self.__initialize_energy_release_rate(domain, model, state, postprocess_pars)
 
     def __initialize_strain(self, mesh, model, state):
         """
@@ -161,8 +165,7 @@ class PostProcessor:
         # Compute the stress from ufl
         sig_ufl = model.sig_eff(state)
         # Initialize the dictionary of reaction forces expressions
-        self.reaction_forces_expr = {}
-        self.reaction_forces = {}
+        self.reaction_forces_forms = {}
         # Get the normals
         n = ufl.FacetNormal(domain.mesh)
         # Iterate through the surfaces
@@ -190,10 +193,12 @@ class PostProcessor:
                 elem_vec = fem.Constant(domain.mesh, elem_vec_np)
                 # Set the expression of the reaction force along direction "comp"
                 expr = ufl.dot(ufl.dot(sig_ufl, n), elem_vec) * ds
+                # Get the associated form
+                form = fem.form(expr)
                 # Store the expression
                 name = f"F_{comp+1} ({facet_name})"
-                self.reaction_forces_expr[name] = expr
-                self.reaction_forces[name] = fem.assemble_scalar(dolfinx.fem.form(expr))
+                self.reaction_forces_forms[name] = form
+                self.scalar_data[name] = fem.assemble_scalar(form)
 
     def __initialize_energies(self, domain, model, state):
         """
@@ -203,30 +208,136 @@ class PostProcessor:
         ----------
         mesh : dolfinx.Mesh
             The mesh representing the domain.
+        model: BaseModel
+            The material model.
         state : dict
             Dictionary containing state variables.
-        postprocess_pars : dict
-            Dictionary containing parameters for post-processing.
         """
         # Initialize the energy dictionary
-        self.energies_expr = {}
+        self.energies_forms = {}
         # Get the stored energies from the model
         if hasattr(model, "elastic_energy"):
-            self.energies_expr["elastic_energy"] = model.elastic_energy(state, domain)
+            expr = model.elastic_energy(state, domain)
+            self.energies_forms["elastic_energy"] = fem.form(expr)
         if hasattr(model, "fracture_dissipation"):
-            self.energies_expr["fracture_dissipation"] = model.fracture_dissipation(
-                state, domain
-            )
+            expr = model.fracture_dissipation(state, domain)
+            self.energies_forms["fracture_dissipation"] = fem.form(expr)
         # Computate of the external work
         u = state["u"]
         sig_ufl = model.sig_eff(state)
         n = ufl.FacetNormal(domain.mesh)
         ds = ufl.Measure("ds", domain=domain.mesh)
-        self.energies_expr["external_work"] = ufl.dot(ufl.dot(sig_ufl, n), u) * ds
+        expr = ufl.dot(ufl.dot(sig_ufl, n), u) * ds
+        self.energies_forms["external_work"] = fem.form(expr)
         # Initialize the values
-        self.energies = {}
-        for name, expr in self.energies_expr.items():
-            self.energies[name] = fem.assemble_scalar(dolfinx.fem.form(expr))
+        for name, form in self.energies_forms.items():
+            self.scalar_data[name] = fem.assemble_scalar(form)
+
+    def __initialize_energy_release_rate(self, domain, model, state, postprocess_pars):
+        """
+        Initialize the computation of the energy release rate.
+
+        It contains the initialization of the $G-\theta$ method.
+        The implementation of this method is based in [1]__ and the implementation of Pietro Gazzi.
+
+        Parameters
+        ----------
+        domain : Domain
+            The domain object containing the mesh and information on the boundaries.
+        model: BaseModel
+            The material model.
+        state : dict
+            Dictionary containing state variables.
+        postprocess_pars : dict
+            Dictionary containing parameters for post-processing.
+
+        .. [1] De Lorenzis, L., Maurini, C. (2021). Basic computational methods for fracture mechanics. NEWFRAC Core School 2021 Course, Notebook 2-LEFM, https://gitlab.com/newfrac/CORE-school/newfrac-core-numerics/-/blob/master/02-LEFM.ipynb.
+        """
+        # Check if the energy release rate must be computated
+        if not "energy_release_rate" in postprocess_pars:
+            return
+        # Check the dimension of the domain
+        if domain.mesh.geometry.dim == 3:
+            error_message = "The energy release rate can not be computed in 3D yet."
+            error_message += (
+                "To implemented it, a line should be specified in the parameter file."
+            )
+            error_message += "Then, the different theta regions are defined using cylinders around this line."
+            raise NotImplementedError(
+                "The energy release rate can not be computed in 3D yet."
+            )
+        # Read the parameters
+        crack_tip = np.array(postprocess_pars["energy_release_rate"]["crack_tip"])
+        R_int = postprocess_pars["energy_release_rate"]["R_int"]
+        R_ext = postprocess_pars["energy_release_rate"]["R_ext"]
+        # Get the theta field
+        theta_field = self.compute_theta_field(domain, crack_tip, R_int, R_ext)
+        # Compute the energy release rate form
+        u = state["u"]
+        eps = model.eps(state)
+        sig = model.sig_eff(state)
+        theta_vector = ufl.as_vector([1.0, 0.0]) * theta_field
+        dx = ufl.dx(domain=domain.mesh)
+        G_expr = (
+            ufl.inner(sig, ufl.grad(u) * ufl.grad(theta_vector)) * dx
+            - 1 / 2 * ufl.inner(sig, eps) * ufl.div(theta_vector) * dx
+        )
+        self.G_form = fem.form(G_expr)
+        # Initialize the
+        self.scalar_data["G"] = fem.assemble_scalar(self.G_form)
+
+    def compute_theta_field(self, domain, crack_tip, R_int, R_ext):
+        """Determine the theta field.
+
+        The theta field is equal to:
+        - 1 when the distance to crack tip is below R_int
+        - 0 when the distance to crack tip is over R_ext
+        In between the two radii, the theta field smoothly transitions from 1 to 0.
+
+        Parameters
+        ----------
+        domain : Domain
+            The domain object containing the mesh and information on the boundaries.
+        crack_tip : array-like
+            Position of the crack tip.
+        R_int : float
+            Interior radius.
+        R_ext : float
+            Exterior radius.
+
+        Returns
+        -------
+        theta_field : dolfinx.fem.Function
+            FEM function containing the theta field.
+        """
+
+        # Define the distance to the crack tip
+        def distance_to_crack_tip(x):
+            return np.sqrt((x[0] - crack_tip[0]) ** 2 + (x[1] - crack_tip[1]) ** 2)
+
+        # Define the variational problem to define theta
+        V_theta = fem.FunctionSpace(domain.mesh, ("Lagrange", 1))
+        theta, theta_ = ufl.TrialFunction(V_theta), ufl.TestFunction(V_theta)
+        a = ufl.dot(ufl.grad(theta), ufl.grad(theta_)) * ufl.dx
+        L = (
+            fem.Constant(domain.mesh, default_scalar_type(0.0))
+            * theta_
+            * ufl.dx(domain=domain.mesh)
+        )
+        # Set the boundary conditions
+        # Imposing 1 in the inner circle and zero in the outer circle
+        dofs_inner = fem.locate_dofs_geometrical(
+            V_theta, lambda x: distance_to_crack_tip(x) < R_int
+        )
+        dofs_out = fem.locate_dofs_geometrical(
+            V_theta, lambda x: distance_to_crack_tip(x) > R_ext
+        )
+        bc_inner = fem.dirichletbc(default_scalar_type(1.0), dofs_inner, V_theta)
+        bc_out = fem.dirichletbc(default_scalar_type(0.0), dofs_out, V_theta)
+        bcs = [bc_out, bc_inner]
+        # Solve the problem
+        problem = fem.petsc.LinearProblem(a, L, bcs=bcs)
+        return problem.solve()
 
     def postprocess(self):
         """
@@ -241,11 +352,14 @@ class PostProcessor:
         for probe in self.probes.values():
             probe.update()
         # Update the reaction forces
-        for name, expr in self.reaction_forces_expr.items():
-            self.reaction_forces[name] = fem.assemble_scalar(dolfinx.fem.form(expr))
+        for name, form in self.reaction_forces_forms.items():
+            self.scalar_data[name] = fem.assemble_scalar(form)
         # Update the energies
-        for name, expr in self.energies_expr.items():
-            self.energies[name] = fem.assemble_scalar(dolfinx.fem.form(expr))
+        for name, expr in self.energies_forms.items():
+            self.scalar_data[name] = fem.assemble_scalar(dolfinx.fem.form(expr))
+        # Compute the energy release rate
+        if "G" in self.scalar_data:
+            self.scalar_data["G"] = fem.assemble_scalar(self.G_form)
 
 
 class Probes:
