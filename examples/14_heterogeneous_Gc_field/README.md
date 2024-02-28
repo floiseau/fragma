@@ -4,9 +4,9 @@
 This example is dedicated to the introduction of heterogeneous critical energy release rate $G_c$ field.
 To use this feature, the expression of $G_c$ as a function of the coordinate `x[0], x[1]` (and `x[2]` in 3D) must be given as a string.
 In this example, it is defined as,
-$$
-G_c(x,y) = 380 \times (1 + 2*x*y).
-$$
+```math
+G_c(x,y) = 380 \times (1 + 2xy).
+```
 It is written as follows in the paramter file.
 ```toml
 Gc = "380*(1+2*x[0]*x[1])"
