@@ -121,7 +121,7 @@ class ElasticEnergyDropEndChecker:
             True if the end time of the simulation is reached, False otherwise.
         """
         # Get the current elastic energy
-        current_elastic_energy = self.postprocessor.energies["elastic_energy"]
+        current_elastic_energy = self.postprocessor.scalar_data["elastic_energy"]
         # Update the maximum elastic energy
         self.maximum_elastic_energy = max(
             self.maximum_elastic_energy, current_elastic_energy
