@@ -501,6 +501,8 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         self.model = model
         # Initialize the load factor
         self.l = 0.0
+        # Initialize the iteration counter
+        self.k = 1
         # Constraint-specific initialization
         match self.constraint:
             case "load_factor_inc":
@@ -520,6 +522,13 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # Generate a function space for strain-like scalars
                 eps_scal_elem = ufl.FiniteElement("DG", domain.mesh.ufl_cell(), 0)
                 self.V_eps_scal = fem.FunctionSpace(domain.mesh, eps_scal_elem)
+        # Initialization of the step size adapation
+        self.step_size_adapation = "k_opt" in pars["loading"]
+        if self.step_size_adapation:
+            # Store the optimal number of alternate minimization iterations
+            self.k_opt = pars["loading"]["k_opt"]
+            # Disable the step size adapation at the begining
+            self.step_size_adapation_enabled = False
 
     def define_problem(self, domain, state, model, bcs_u):
         """
@@ -564,10 +573,15 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         """
         # Store the time
         self.t = t
+        # Store the number of iteration to converge in previous load step
+        self.k_nm1 = self.k
         # Reset the iteration counter
         self.k = 1
         # Select the control equation for the current phase
         self.control_eq = self.select_control_equation()
+        # Adapt the step size if the option is enabled
+        if self.step_size_adapation:
+            self.adapt_step_size()
         # Store the displacement at the beginning of load step
         self.u0.x.array[:] = self.u.x.array
         self.u0.x.scatter_forward()
@@ -599,28 +613,34 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         during the simulation. The available control equations are:
         - 'load_factor_inc': Increase the load factor incrementally.
         - 'max_strain_inc': Increase the load factor to obtain a specific value of the maximum strain in the domain.
-        When choosing the 'max_strain_inc' constraint, the load factor increment is used when the displacements fields from the two last load steps are proportional.
-
+        When choosing the 'max_strain_inc' constraint, the load factor increment is used for the two first loads steps: one for the unloaded step and another one for the initialization of the method.
         """
         match self.constraint:
             case "load_factor_inc":
                 control_eq = "load_factor_inc"
             case "max_strain_inc":
-                if self.t <= 1:
-                    control_eq = "load_factor_inc"
-                else:
-                    # Get the displacement fields from previous iterations
-                    u0 = self.u0.x.array.flatten()
-                    u = self.u.x.array.flatten()
-                    # Use the Pearson coefficient to check if the new displacement
-                    # field is proportional to the old one
-                    corr_coeff = np.corrcoef(u0, u)[0, 1]
-                    elasticity = np.isclose(corr_coeff, 1, rtol=0, atol=1e-9)
-                    control_eq = (
-                        "max_strain_inc" if not elasticity else "load_factor_inc"
-                    )
-        print(f"Control equation: {control_eq}")
+                control_eq = "max_strain_inc" if self.t > 1 else "load_factor_inc"
         return control_eq
+
+    def adapt_step_size(self):
+        """Adapt the step size during the simulation.
+
+        This method adjusts the step size (`dtau`) based on the control equation and
+        the current iteration number. If the step size adaptation flag is set to
+        False and the iteration number exceeds the optimal number of AM iterations, the flag
+        is set to True to indicate that step size adaptation should begin. If step size
+        adaptation is active and the control equation is 'max_strain_inc', the step
+        size is adjusted by multiplying it by the ratio of the optimal iteration number
+        to the iteration number of the previous load step.
+        """
+        # Check the step size adapation must be started
+        if not self.step_size_adapation_enabled and self.k_nm1 > self.k_opt:
+            self.step_size_adapation_enabled = True
+        # Adapt the step size dtau
+        if self.step_size_adapation_enabled and self.control_eq == "max_strain_inc":
+            coeff = self.k_opt / self.k_nm1
+            self.dtau *= coeff
+            print(f"Adapation of the step size: dtau*{coeff:.3f}={self.dtau:.3g}.")
 
     def solve(self):
         """Solve the partitioned displacement subproblem."""
