@@ -34,7 +34,9 @@ def choose_end_checker(end_pars, time_stepper, postprocessor):
             drop = end_pars["drop"]
             return ElasticEnergyDropEndChecker(postprocessor, drop)
         case _:
-            raise RuntimeError(f"The end criterion '{end_pars['criterion']}' does not exists.")
+            raise RuntimeError(
+                f"The end criterion '{end_pars['criterion']}' does not exists."
+            )
 
 
 class TimeEndChecker:
