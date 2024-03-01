@@ -9,7 +9,7 @@ One can apply the following commands to install those modules inside an environm
 ```shell
 $ conda create -n fragma
 $ conda activate fragma
-$ conda install -c conda-forge fenics-dolfinx mpich pyvista python-gmsh mpi4py petsc4py scipy
+$ conda install -c conda-forge fenics-dolfinx mpich pyvista python-gmsh mpi4py petsc4py scipy sympy
 ```
 Note that it is recommanded to use [libmamba](https://www.anaconda.com/blog/a-faster-conda-for-a-growing-community) for a faster environment creation.
 
@@ -28,6 +28,16 @@ Once both files are provided, different steps are necessary to run it.
 The files names `quantity.pvd` (*e.g.*, `Displacement.pvd`) can be opened with Paraview to visualize the simulation results.
 
 *Remark: In some Linux distribution, the environment variable `OMP_NUM_THREADS` is not set, leading FEniCSx solve the same problem on all the available cores. To prevent that, `OMP_NUM_THREADS=1` must be prepended to the command to run `fragma`.*
+
+## Dashboard
+To see intermediate results and track the progress of a simulation, a dashboard in included with `fragma`.
+To use this dashboard, additional dependencies (`plotly`) are required.
+To install them, run the following command.
+```shell
+$ conda activate fragma
+$ conda install plotly
+```
+The files and instructions required to use the dashboard are available in the [tools/dashboard](tools/dashboard/) directory.
 
 ## Content of input files
 TODO
