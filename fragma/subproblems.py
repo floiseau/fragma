@@ -684,7 +684,7 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         # Computation of the incremement of load factor
         match self.control_eq:
             case "load_factor_inc":
-                if self.k == 1:
+                if self.k == 1 and self.t >= 1:
                     # Increment the load factor
                     self.l += self.dl
             case "max_strain_inc":
