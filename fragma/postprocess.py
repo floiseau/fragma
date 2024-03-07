@@ -222,6 +222,9 @@ class PostProcessor:
         if hasattr(model, "fracture_dissipation"):
             expr = model.fracture_dissipation(state, domain)
             self.energies_forms["fracture_dissipation"] = fem.form(expr)
+        # Undamaged elastic energy
+        expr = fem.form(1 / 2 * ufl.inner(model.sig(state), model.eps(state)) * ufl.dx)
+        self.energies_forms["undamaged_elastic_energy"] = fem.form(expr)
         # Computate of the external work
         u = state["u"]
         sig_ufl = model.sig_eff(state)
