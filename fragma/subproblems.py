@@ -522,6 +522,27 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # Generate a function space for strain-like scalars
                 eps_scal_elem = ufl.FiniteElement("DG", domain.mesh.ufl_cell(), 0)
                 self.V_eps_scal = fem.FunctionSpace(domain.mesh, eps_scal_elem)
+            case "undamaged_elastic_energy":
+                # Get the load factor increment in the initial phase
+                self.dl = pars["loading"]["dl"]
+                # Set the step size
+                self.dtau = pars["loading"]["dtau"]
+                # Define the undamaged elastic energy form
+                sig0 = self.model.sig({"u": self.u0})
+                eps0 = self.model.eps({"u": self.u0})
+                self.e0_form = fem.form(1 / 2 * ufl.inner(sig0, eps0) * ufl.dx)
+                # Define the forms for the undamage elastic energy terms
+                eps1 = self.model.eps({"u": self.u1})
+                eps2 = self.model.eps({"u": self.u2})
+                # Compute the stresses
+                sig1 = self.model.sig({"u": self.u1})
+                sig2 = self.model.sig({"u": self.u2})
+                # Compute the energies
+                self.e11_form = fem.form(1 / 2 * ufl.inner(sig1, eps1) * ufl.dx)
+                self.e22_form = fem.form(1 / 2 * ufl.inner(sig2, eps2) * ufl.dx)
+                self.e12_form = fem.form(1 / 2 * ufl.inner(sig1, eps2) * ufl.dx)
+                self.e21_form = fem.form(1 / 2 * ufl.inner(sig2, eps1) * ufl.dx)
+
         # Initialization of the step size adapation
         self.step_size_adapation = "k_opt" in pars["loading"]
         if self.step_size_adapation:
@@ -595,6 +616,9 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
             )
             self.eps0_normed = fem.Function(self.V_eps, name="NormedStrain")
             self.eps0_normed.interpolate(eps0_normed_expr)
+        elif self.constraint == "undamaged_elastic_energy":
+            # Compute the undamaged elastic energy from previous load steps
+            self.e0 = fem.assemble_scalar(self.e0_form)
 
     def select_control_equation(self):
         """Select the control equation.
@@ -620,6 +644,10 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 control_eq = "load_factor_inc"
             case "max_strain_inc":
                 control_eq = "max_strain_inc" if self.t > 1 else "load_factor_inc"
+            case "undamaged_elastic_energy":
+                control_eq = (
+                    "undamaged_elastic_energy" if self.t > 1 else "load_factor_inc"
+                )
         return control_eq
 
     def adapt_step_size(self):
@@ -629,15 +657,14 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         the current iteration number. If the step size adaptation flag is set to
         False and the iteration number exceeds the optimal number of AM iterations, the flag
         is set to True to indicate that step size adaptation should begin. If step size
-        adaptation is active and the control equation is 'max_strain_inc', the step
-        size is adjusted by multiplying it by the ratio of the optimal iteration number
-        to the iteration number of the previous load step.
+        adaptation is active, the step size is adjusted by multiplying it by the ratio of
+        the optimal iteration number to the iteration number of the previous load step.
         """
         # Check the step size adapation must be started
         if not self.step_size_adapation_enabled and self.k_nm1 > self.k_opt:
             self.step_size_adapation_enabled = True
         # Adapt the step size dtau
-        if self.step_size_adapation_enabled and self.control_eq == "max_strain_inc":
+        if self.step_size_adapation_enabled:
             coeff = self.k_opt / self.k_nm1
             self.dtau *= coeff
             print(f"Adapation of the step size: dtau*{coeff:.3f}={self.dtau:.3g}.")
@@ -692,6 +719,20 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                         )
                     # Choose the load factor as the upper bound
                     self.l = l_max
+            case "undamaged_elastic_energy":
+                if self.t > 1:
+                    # Compute the terms of the undamaged elastic energy
+                    e11 = fem.assemble_scalar(self.e11_form)
+                    e22 = fem.assemble_scalar(self.e22_form)
+                    e12 = fem.assemble_scalar(self.e12_form)
+                    e21 = fem.assemble_scalar(self.e21_form)
+                    # Compute the coefficients of the polynomial constraint
+                    a = e22
+                    b = e12 + e21
+                    c = e11 - (np.sqrt(self.e0) + self.dtau) ** 2
+                    d = b**2 - 4 * a * c
+                    # Compute the ideal load factor
+                    self.l = (-b + np.sqrt(d)) / (2 * a)
         # Update the displacement
         self.u.x.array[:] = self.u1.x.array + self.l * self.u2.x.array
         self.u.x.scatter_forward()
