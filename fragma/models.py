@@ -35,22 +35,22 @@ class BaseModel:
             Dictionary containing parameters of the material model.
         """
         # Get elastic parameters
-        E = pars["mechanical"]["E"]
-        nu = pars["mechanical"]["nu"]
+        self.E = pars["mechanical"]["E"]
+        self.nu = pars["mechanical"]["nu"]
         # Compute Lame coefficient
-        self.la = E * nu / ((1 + nu) * (1 - 2 * nu))
-        self.mu = E / (2 * (1 + nu))
+        self.la = self.E * self.nu / ((1 + self.nu) * (1 - 2 * self.nu))
+        self.mu = self.E / (2 * (1 + self.nu))
         # Check the 2D assumption
         if pars["model"]["dim"] == 2:
-            assumption = pars["model"]["2D_assumption"]
-            match assumption:
+            self.assumption = pars["model"]["2D_assumption"]
+            match self.assumption:
                 case "plane_stress":
                     print("Plane stress assumption")
                     self.la = 2 * self.mu * self.la / (self.la + 2 * self.mu)
                 case "plane_strain":
                     print("Plane strain assumption")
                 case _:
-                    raise ValueError(f'The 2D assumption "{assumption}" in unknown')
+                    raise ValueError(f'The 2D assumption "{self.assumption}" in unknown')
 
     def eps(self, state):
         """

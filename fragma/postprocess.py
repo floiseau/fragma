@@ -61,6 +61,8 @@ class PostProcessor:
         self.__initialize_energies(domain, model, state)
         # Initialize the energy release rate computation
         self.__initialize_energy_release_rate(domain, model, state, postprocess_pars)
+        # Initialize the T-stress computation
+        self.__initialize_T_stress(domain, model, state, postprocess_pars)
 
     def __initialize_strain(self, mesh, model, state):
         """
@@ -273,13 +275,14 @@ class PostProcessor:
         crack_tip = np.array(postprocess_pars["energy_release_rate"]["crack_tip"])
         R_int = postprocess_pars["energy_release_rate"]["R_int"]
         R_ext = postprocess_pars["energy_release_rate"]["R_ext"]
+        alpha = np.deg2rad(postprocess_pars["energy_release_rate"]["crack_growth_angle"])
         # Get the theta field
         theta_field = self.compute_theta_field(domain, crack_tip, R_int, R_ext)
         # Compute the energy release rate form
         u = state["u"]
         eps = model.eps(state)
         sig = model.sig_eff(state)
-        theta_vector = ufl.as_vector([1.0, 0.0]) * theta_field
+        theta_vector = ufl.as_vector([ufl.cos(alpha), ufl.sin(alpha)]) * theta_field
         dx = ufl.dx(domain=domain.mesh)
         G_expr = (
             ufl.inner(sig, ufl.grad(u) * ufl.grad(theta_vector)) * dx
@@ -330,10 +333,10 @@ class PostProcessor:
         # Set the boundary conditions
         # Imposing 1 in the inner circle and zero in the outer circle
         dofs_inner = fem.locate_dofs_geometrical(
-            V_theta, lambda x: distance_to_crack_tip(x) < R_int
+            V_theta, lambda x: distance_to_crack_tip(x) <= R_int
         )
         dofs_out = fem.locate_dofs_geometrical(
-            V_theta, lambda x: distance_to_crack_tip(x) > R_ext
+            V_theta, lambda x: distance_to_crack_tip(x) >= R_ext
         )
         bc_inner = fem.dirichletbc(default_scalar_type(1.0), dofs_inner, V_theta)
         bc_out = fem.dirichletbc(default_scalar_type(0.0), dofs_out, V_theta)
@@ -341,6 +344,90 @@ class PostProcessor:
         # Solve the problem
         problem = fem.petsc.LinearProblem(a, L, bcs=bcs)
         return problem.solve()
+
+    def __initialize_T_stress(self, domain, model, state, postprocess_pars):
+        """
+        Initialize the computation of the energy release rate.
+
+        It contains the initialization of the $G-\theta$ method.
+        The implementation of this method is based in [1]__ and the implementation of Pietro Gazzi.
+
+        Parameters
+        ----------
+        domain : Domain
+            The domain object containing the mesh and information on the boundaries.
+        model: BaseModel
+            The material model.
+        state : dict
+            Dictionary containing state variables.
+        postprocess_pars : dict
+            Dictionary containing parameters for post-processing.
+
+        .. [1] De Lorenzis, L., Maurini, C. (2021). Basic computational methods for fracture mechanics. NEWFRAC Core School 2021 Course, Notebook 2-LEFM, https://gitlab.com/newfrac/CORE-school/newfrac-core-numerics/-/blob/master/02-LEFM.ipynb.
+        """
+        # Check if the energy release rate must be computated
+        if not "T_stress" in postprocess_pars:
+            return
+        # Check the dimension of the domain
+        if domain.mesh.geometry.dim == 3:
+            error_message = "The T-stress can not be computed in 3D yet."
+            raise NotImplementedError(error_message)
+        # Read the parameters
+        crack_tip = np.array(postprocess_pars["T_stress"]["crack_tip"])
+        R_int = postprocess_pars["T_stress"]["R_int"]
+        R_ext = postprocess_pars["T_stress"]["R_ext"]
+        alpha = np.deg2rad(postprocess_pars["T_stress"]["crack_growth_angle"])
+        # Get the theta field
+        theta_field = self.compute_theta_field(domain, crack_tip, R_int, R_ext)
+        theta_vector = ufl.as_vector([ufl.cos(alpha), ufl.sin(alpha)]) * theta_field
+        # Get the displacement field
+        u = state["u"]
+        # Get the elastic parameters
+        E = model.E
+        mu = model.mu
+        # Other elastic parameter (not the bulk modulus !)
+        nu = model.nu
+        ka = 3-4*model.nu if model.assumption == "plane_strain" else (3-nu)/(1+nu)
+        # Other parameters
+        F = 1
+        d = 1
+        # Compute the auxiliary displacement field
+        x = ufl.SpatialCoordinate(domain.mesh)
+        x_tip = ufl.as_vector(crack_tip)
+        r_vec = x - x_tip
+        r = ufl.sqrt(ufl.dot(r_vec, r_vec))
+        phi = ufl.atan2(r_vec[1], r_vec[0]) - alpha
+        u_1_aux = -F/np.pi * (ka+1)/(8*mu) * ufl.ln(r/d) - F/np.pi * 1/(4*mu) * ufl.sin(phi)**2
+        u_2_aux = -F/np.pi * (ka-1)/(8*mu) * phi + F/np.pi * 1/(4*mu) * ufl.sin(phi)*ufl.cos(phi)
+        u_aux = ufl.as_vector([u_1_aux, u_2_aux])
+        # Compute displacement gradients
+        grad_u = ufl.grad(u)
+        grad_u_aux = ufl.grad(u_aux)
+        # Compute the strains
+        eps = ufl.sym(grad_u)
+        eps_aux = ufl.sym(grad_u_aux)
+        # Compute the stresses
+        sig = model.sig_eff({"u": u})
+        sig_aux = model.sig_eff({"u": u_aux})
+        # Compute theta gradient and div
+        div_theta = ufl.div(theta_vector)
+        grad_theta = ufl.grad(theta_vector)
+        # Compute the terms of the interaction integral
+        dx = ufl.dx(domain=domain.mesh)
+        Iw12 = 1/2 * ufl.inner(sig, eps_aux) * div_theta * dx
+        Iw21 = 1/2 * ufl.inner(sig_aux, eps) * div_theta * dx
+        Ig12 = ufl.inner(sig, grad_u_aux * grad_theta) * dx
+        Ig21 = ufl.inner(sig_aux, grad_u * grad_theta) * dx
+        # Compute the interaction integral expression
+        I_expr = Ig12 + Ig21 - Iw12 - Iw21
+        # Compute the T-stress value
+        Ep = E
+        Ep /= (1 - model.nu**2) if model.assumption == "plane_strain" else 1
+        T_expr = Ep/F * I_expr
+        # Compute the interaction integral form
+        self.T_form = fem.form(T_expr)
+        # Initialize the
+        self.scalar_data["T_stress"] = fem.assemble_scalar(self.T_form)
 
     def postprocess(self):
         """
@@ -363,6 +450,9 @@ class PostProcessor:
         # Compute the energy release rate
         if "G" in self.scalar_data:
             self.scalar_data["G"] = fem.assemble_scalar(self.G_form)
+        # Compute the T-stress
+        if "T_stress" in self.scalar_data:
+            self.scalar_data["T_stress"] = fem.assemble_scalar(self.T_form)
 
 
 class Probes:
