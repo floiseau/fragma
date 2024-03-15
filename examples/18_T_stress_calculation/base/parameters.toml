@@ -2,7 +2,6 @@
 name = "elasticity"
 dim = 2
 2D_assumption = "plane_strain"
-model = "AT1"
 
 [mesh]
 msh_file = "mesh.msh"
@@ -16,15 +15,15 @@ crack = 13
 utol = 1e-9
 
 [mechanical]
-E = 230.77e9
-nu = 0.43
+E = 1
+nu = 0.3
 
 [loading]
-lock_point = [0, 0, 0]
+lock_point = [0, -0.5, 0]
 [loading.u_imp_max]
 bot = [nan, 0]
 [loading.f_imp_max]
-top = [0, 1e9]
+top = [0, 1]
 
 [end]
 criterion = "t"
@@ -34,13 +33,11 @@ t_max = 1
 reaction_forces = ["bot", "top"]
 [postprocess.probes]
 displacement= [
-    [0, 1e-3, 0],
-    [0.5e-3, 0.49e-3, 0],
-    [0.5e-3, 0.51e-3, 0],
+    [-0.5, 0, 0],
+    [ 0.5, 0, 0],
 ]
-[postprocess.energy_release_rate]
-crack_tip = [0.25e-3, 0.5e-3, 0]
-R_int = 0.1e-3
-R_ext = 0.2e-3
+[postprocess.T_stress]
+crack_tip = [0.05, 0]
+R_int = {R_int}
+R_ext = {R_ext}
 crack_growth_angle = 0
-
