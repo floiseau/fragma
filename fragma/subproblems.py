@@ -500,33 +500,56 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         # Store the model
         self.model = model
         # Initialize the load factor
+        self.l0 = 0.0
         self.l = 0.0
         # Initialize the iteration counter
         self.k = 1
+        # Get the load factor increment in the initial phase
+        self.dl = pars["loading"]["dl"]
+        if self.constraint != "load_factor_inc":
+            # Set the step size
+            self.dtau = pars["loading"]["dtau"]
+            # Set the minimal step size (during crack propagation)
+            self.dtau_min = pars["loading"].get("dtau_min", 0)
         # Constraint-specific initialization
         match self.constraint:
             case "load_factor_inc":
                 # Get the load factor increment
                 self.dl = pars["loading"]["dl"]
+
             case "max_strain_inc":
-                # Get the load factor increment in the initial phase
-                self.dl = pars["loading"]["dl"]
-                # Set the maximal increment of strain
-                self.dtau = pars["loading"]["dtau"]
                 # Generate a function space for strain-like scalars
                 eps_ufl = model.eps(state)
                 eps_elem = ufl.TensorElement(
                     "DG", domain.mesh.ufl_cell(), 0, shape=eps_ufl.ufl_shape
                 )
-                self.V_eps = fem.FunctionSpace(domain.mesh, eps_elem)
+                V_eps = fem.FunctionSpace(domain.mesh, eps_elem)
                 # Generate a function space for strain-like scalars
                 eps_scal_elem = ufl.FiniteElement("DG", domain.mesh.ufl_cell(), 0)
-                self.V_eps_scal = fem.FunctionSpace(domain.mesh, eps_scal_elem)
+                V_eps_scal = fem.FunctionSpace(domain.mesh, eps_scal_elem)
+                # Define the normed strain expression from previous load steps
+                eps0 = self.model.eps({"u": self.u0})
+                eps0_norm = ufl.sqrt(ufl.inner(eps0, eps0))
+                self.eps0_normed_expr = fem.Expression(
+                    eps0 / eps0_norm, V_eps.element.interpolation_points()
+                )
+                self.eps0_normed = fem.Function(V_eps, name="NormedStrain")
+                # Get the strain increment values
+                deps1 = self.model.eps({"u": self.u1 - self.u0})
+                deps2 = self.model.eps({"u": self.u2})
+                # Define the coefficients expressions and functions
+                self.a0_expr = fem.Expression(
+                    ufl.inner(self.eps0_normed, deps1),
+                    V_eps_scal.element.interpolation_points(),
+                )
+                self.a1_expr = fem.Expression(
+                    ufl.inner(self.eps0_normed, deps2),
+                    V_eps_scal.element.interpolation_points(),
+                )
+                self.a0 = fem.Function(V_eps_scal, name="a0")
+                self.a1 = fem.Function(V_eps_scal, name="a1")
+
             case "undamaged_elastic_energy":
-                # Get the load factor increment in the initial phase
-                self.dl = pars["loading"]["dl"]
-                # Set the step size
-                self.dtau = pars["loading"]["dtau"]
                 # Define the undamaged elastic energy form
                 sig0 = self.model.sig({"u": self.u0})
                 eps0 = self.model.eps({"u": self.u0})
@@ -580,7 +603,6 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         modified_state = state.copy()
         modified_state["u"] = self.ui
         # Define the problem using the parent class
-
         super().define_problem(domain, modified_state, model, bcs_u)
 
     def update(self, t: float):
@@ -608,14 +630,8 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         self.u0.x.scatter_forward()
         # Check the constraint
         if self.constraint == "max_strain_inc":
-            # Compute the normalized strain from previous load steps
-            eps0 = self.model.eps({"u": self.u0})
-            eps0_norm = ufl.sqrt(ufl.inner(eps0, eps0))
-            eps0_normed_expr = fem.Expression(
-                eps0 / eps0_norm, self.V_eps.element.interpolation_points()
-            )
-            self.eps0_normed = fem.Function(self.V_eps, name="NormedStrain")
-            self.eps0_normed.interpolate(eps0_normed_expr)
+            # Update the previous normed strain field
+            self.eps0_normed.interpolate(self.eps0_normed_expr)
         elif self.constraint == "undamaged_elastic_energy":
             # Compute the undamaged elastic energy from previous load steps
             self.e0 = fem.assemble_scalar(self.e0_form)
@@ -661,16 +677,22 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         the optimal iteration number to the iteration number of the previous load step.
         """
         # Check the step size adapation must be started
-        if not self.step_size_adapation_enabled and self.k_nm1 > self.k_opt:
+        if not self.step_size_adapation_enabled and self.k_nm1 > self.k_opt / 2:
             self.step_size_adapation_enabled = True
         # Adapt the step size dtau
         if self.step_size_adapation_enabled:
+            # Compute and apply the adaptation coefficient
             coeff = self.k_opt / self.k_nm1
             self.dtau *= coeff
-            print(f"Adapation of the step size: dtau*{coeff:.3f}={self.dtau:.3g}.")
+            # If the load factor decrease (crack propagating), apply a min value
+            if self.l0 > self.l:
+                self.dtau = max(self.dtau_min, self.dtau)
+            print(f"Step size adapation: dtau={self.dtau:.3g}.")
 
     def solve(self):
         """Solve the partitioned displacement subproblem."""
+        # Store the previous load factor
+        self.l0 = self.l
         # Set boundary conditions to 0
         self.update_boundary_conditions(0.0)
         # Get the displacement increment
@@ -688,37 +710,22 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                     # Increment the load factor
                     self.l += self.dl
             case "max_strain_inc":
-                if self.t > 1:
-                    # Compute the load factor increment for each element
-                    deps1 = self.model.eps({"u": self.u1 - self.u0})
-                    deps2 = self.model.eps({"u": self.u2})
-                    a0_expr = fem.Expression(
-                        ufl.inner(self.eps0_normed, deps1),
-                        self.V_eps_scal.element.interpolation_points(),
+                # Update the coefficients
+                self.a0.interpolate(self.a0_expr)
+                self.a1.interpolate(self.a1_expr)
+                lambdas = (self.dtau - self.a0.x.array) / self.a1.x.array
+                # Choose the load factor using nested interval
+                a1_inf_0 = self.a1.x.array <= 0
+                a1_sup_0 = self.a1.x.array > 0
+                l_max = np.min(lambdas[a1_sup_0]) if any(a1_sup_0) else float("inf")
+                l_min = np.max(lambdas[a1_inf_0]) if any(a1_inf_0) else -float("inf")
+                # Check if the interval is valid
+                if l_max < l_min:
+                    raise RuntimeError(
+                        f"The maximal increment of load factor is inferior the the minimal (min: {l_min:.3g}, max: {l_max:.3g}.)"
                     )
-                    a0 = fem.Function(self.V_eps_scal, name="a0")
-                    a0.interpolate(a0_expr)
-                    a1_expr = fem.Expression(
-                        ufl.inner(self.eps0_normed, deps2),
-                        self.V_eps_scal.element.interpolation_points(),
-                    )
-                    a1 = fem.Function(self.V_eps_scal, name="a1")
-                    a1.interpolate(a1_expr)
-                    lambdas = (self.dtau - a0.x.array) / a1.x.array
-                    # Choose the load factor using nested interval
-                    a1_inf_0 = a1.x.array <= 0
-                    a1_sup_0 = a1.x.array > 0
-                    l_max = np.min(lambdas[a1_sup_0]) if any(a1_sup_0) else float("inf")
-                    l_min = (
-                        np.max(lambdas[a1_inf_0]) if any(a1_inf_0) else -float("inf")
-                    )
-                    # Check if the interval is valid
-                    if l_max < l_min:
-                        raise RuntimeError(
-                            f"The maximal increment of load factor is inferior the the minimal (min: {l_min:.3g}, max: {l_max:.3g}.)"
-                        )
-                    # Choose the load factor as the upper bound
-                    self.l = l_max
+                # Choose the load factor as the upper bound
+                self.l = l_max
             case "undamaged_elastic_energy":
                 if self.t > 1:
                     # Compute the terms of the undamaged elastic energy
@@ -830,22 +837,14 @@ class CrackPhaseSubProblem:
         problem_alpha.getKSP().getPC().setMGLevels(1)
 
         # Define lower and upper bounds functions for the crack phase field
-        self.alpha_lb = fem.Function(V_alpha, name="Lower bound")
-        self.alpha_ub = fem.Function(V_alpha, name="Upper bound")
-        # Set the lower bound
-        with self.alpha_lb.vector.localForm() as alpha_lb_local:
-            alpha_lb_local.set(0.0)
-        fem.set_bc(self.alpha_lb.vector, bcs_alpha)
+        self.alpha_lb = alpha.copy()
+        self.alpha_ub = alpha.copy()
         # Set the upper bound
-        one_alpha = fem.Function(V_alpha)
         with self.alpha_ub.vector.localForm() as alpha_ub_local:
             alpha_ub_local.set(1.0)
         fem.set_bc(self.alpha_ub.vector, bcs_alpha)
         # Set the crack phrase boundary bound (Note: they are passed as reference and not as values)
         problem_alpha.setVariableBounds(self.alpha_lb.vector, self.alpha_ub.vector)
-
-        # Initialise alpha
-        self.alpha_lb.vector.copy(alpha.vector)
 
         # Display information about the displacement solver
         problem_alpha.view()
@@ -871,36 +870,37 @@ class CrackPhaseSubProblem:
             List of boundary conditions for the crack phase sub-problem.
         """
         print("\n████ INITIALISATION OF THE CRACK FIELD")
-        # Add the damage boundary conditions if there is an initial crack
-        if "crack" in domain.boundary_facets:
-            # Get the dimensions of domain and facets
-            dim = domain.mesh.geometry.dim
-            fdim = domain.mesh.geometry.dim - 1
-            # Get the crack phase function space
-            V_alpha = state["alpha"].function_space
-            # Get boundary facets
-            boundary_facets = domain.boundary_facets
-            # Get boundary dofs (per comp)
-            boundaries = {
-                f"{facet_name}": fem.locate_dofs_topological(
-                    V_alpha,
-                    fdim,
-                    boundary_facet,
-                )
-                for facet_name, boundary_facet in boundary_facets.items()
-            }
-            # Create the crack boundary condition
-            bcs_alpha_crack = [fem.dirichletbc(1.0, boundaries["crack"], V_alpha)]
-            # Create the uncrackable crack boundary condition
-            bcs_alpha_noncrackable = [
-                fem.dirichletbc(0.0, b_dof, V_alpha)
-                for boundary, b_dof in boundaries.items()
-                if boundary.startswith("non-crackable")
-            ]
-            #
-            bcs_alpha = bcs_alpha_crack + bcs_alpha_noncrackable
-        else:
-            bcs_alpha = []
+        # Initialize the crack field
+        with state["alpha"].vector.localForm() as alpha_local:
+            alpha_local.set(0.0)
+        # Initialize the crack bcs
+        bcs_alpha = []
+        # Get the dimensions of domain and facets
+        dim = domain.mesh.geometry.dim
+        fdim = domain.mesh.geometry.dim - 1
+        # Get the crack phase function space
+        V_alpha = state["alpha"].function_space
+        # Get boundary facets
+        boundary_facets = domain.boundary_facets
+        # Get boundary dofs (per comp)
+        boundaries = {
+            f"{facet_name}": fem.locate_dofs_topological(
+                V_alpha,
+                fdim,
+                boundary_facet,
+            )
+            for facet_name, boundary_facet in boundary_facets.items()
+        }
+        # Create the crack boundary condition
+        if "crack" in boundaries:
+            bcs_alpha.append(fem.dirichletbc(1.0, boundaries["crack"], V_alpha))
+        # Create the uncrackable crack boundary condition
+        bcs_alpha_noncrackable = [
+            fem.dirichletbc(0.0, b_dof, V_alpha)
+            for boundary, b_dof in boundaries.items()
+            if boundary.startswith("non-crackable")
+        ]
+        bcs_alpha += bcs_alpha_noncrackable
         return bcs_alpha
 
     def update_boundary_conditions(self, t: float):

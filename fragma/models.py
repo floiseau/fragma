@@ -50,7 +50,9 @@ class BaseModel:
                 case "plane_strain":
                     print("Plane strain assumption")
                 case _:
-                    raise ValueError(f'The 2D assumption "{self.assumption}" in unknown')
+                    raise ValueError(
+                        f'The 2D assumption "{self.assumption}" in unknown'
+                    )
 
     def eps(self, state):
         """

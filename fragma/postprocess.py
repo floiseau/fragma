@@ -275,7 +275,9 @@ class PostProcessor:
         crack_tip = np.array(postprocess_pars["energy_release_rate"]["crack_tip"])
         R_int = postprocess_pars["energy_release_rate"]["R_int"]
         R_ext = postprocess_pars["energy_release_rate"]["R_ext"]
-        alpha = np.deg2rad(postprocess_pars["energy_release_rate"]["crack_growth_angle"])
+        alpha = np.deg2rad(
+            postprocess_pars["energy_release_rate"]["crack_growth_angle"]
+        )
         # Get the theta field
         theta_field = self.compute_theta_field(domain, crack_tip, R_int, R_ext)
         # Compute the energy release rate form
@@ -387,7 +389,11 @@ class PostProcessor:
         mu = model.mu
         # Other elastic parameter (not the bulk modulus !)
         nu = model.nu
-        ka = 3-4*model.nu if model.assumption == "plane_strain" else (3-nu)/(1+nu)
+        ka = (
+            3 - 4 * model.nu
+            if model.assumption == "plane_strain"
+            else (3 - nu) / (1 + nu)
+        )
         # Other parameters
         F = 1
         d = 1
@@ -397,8 +403,13 @@ class PostProcessor:
         r_vec = x - x_tip
         r = ufl.sqrt(ufl.dot(r_vec, r_vec))
         phi = ufl.atan2(r_vec[1], r_vec[0]) - alpha
-        u_1_aux = -F/np.pi * (ka+1)/(8*mu) * ufl.ln(r/d) - F/np.pi * 1/(4*mu) * ufl.sin(phi)**2
-        u_2_aux = -F/np.pi * (ka-1)/(8*mu) * phi + F/np.pi * 1/(4*mu) * ufl.sin(phi)*ufl.cos(phi)
+        u_1_aux = (
+            -F / np.pi * (ka + 1) / (8 * mu) * ufl.ln(r / d)
+            - F / np.pi * 1 / (4 * mu) * ufl.sin(phi) ** 2
+        )
+        u_2_aux = -F / np.pi * (ka - 1) / (8 * mu) * phi + F / np.pi * 1 / (
+            4 * mu
+        ) * ufl.sin(phi) * ufl.cos(phi)
         u_aux = ufl.as_vector([u_1_aux, u_2_aux])
         # Compute displacement gradients
         grad_u = ufl.grad(u)
@@ -414,8 +425,8 @@ class PostProcessor:
         grad_theta = ufl.grad(theta_vector)
         # Compute the terms of the interaction integral
         dx = ufl.dx(domain=domain.mesh)
-        Iw12 = 1/2 * ufl.inner(sig, eps_aux) * div_theta * dx
-        Iw21 = 1/2 * ufl.inner(sig_aux, eps) * div_theta * dx
+        Iw12 = 1 / 2 * ufl.inner(sig, eps_aux) * div_theta * dx
+        Iw21 = 1 / 2 * ufl.inner(sig_aux, eps) * div_theta * dx
         Ig12 = ufl.inner(sig, grad_u_aux * grad_theta) * dx
         Ig21 = ufl.inner(sig_aux, grad_u * grad_theta) * dx
         # Compute the interaction integral expression
@@ -423,7 +434,7 @@ class PostProcessor:
         # Compute the T-stress value
         Ep = E
         Ep /= (1 - model.nu**2) if model.assumption == "plane_strain" else 1
-        T_expr = Ep/F * I_expr
+        T_expr = Ep / F * I_expr
         # Compute the interaction integral form
         self.T_form = fem.form(T_expr)
         # Initialize the
