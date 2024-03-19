@@ -58,6 +58,8 @@ class BaseProblem:
         self.domain = Domain(pars["mesh"], pars["model"]["dim"])
         # Define the state variables
         self.define_state_variables()
+        # Define the model
+        self.define_model(self.domain)
         # Define subproblems
         self.subproblems = {}
         self.define_subproblems()
@@ -91,6 +93,16 @@ class BaseProblem:
         """
         raise NotImplementedError(
             "Solver: The method 'define_state_variables' must be implemented in the child class."
+        )
+
+    def define_model(self, domain):
+        """
+        Define the model for the problem.
+
+        This method must be implemented in the child class.
+        """
+        raise NotImplementedError(
+            "Solver: The method 'define_model' must be implemented in the child class."
         )
 
     def define_subproblems(self):
