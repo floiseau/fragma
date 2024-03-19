@@ -549,6 +549,25 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 self.a0 = fem.Function(V_eps_scal, name="a0")
                 self.a1 = fem.Function(V_eps_scal, name="a1")
 
+            case "nodal_disp_inc":
+                # Get the parameters
+                self.selection = pars["loading"]["selection"]
+                # Compute the selection matrix
+                c = np.hstack([p["coeff"] for p in self.selection])
+                self.s = np.einsum("i,j->ij", c, c)
+                # Get the cells for displacement evaluation
+                mesh = domain.mesh
+                xs = [p["pos"] for p in self.selection]
+                tree = dolfinx.geometry.bb_tree(mesh, mesh.topology.dim)
+                cell_candidates = dolfinx.geometry.compute_collisions_points(tree, xs)
+                colliding_cells = dolfinx.geometry.compute_colliding_cells(
+                    mesh, cell_candidates, xs
+                )
+                cells = [colliding_cells.links(i)[0] for i, x in enumerate(xs)]
+                # Store the cells in selection
+                for i, p in enumerate(self.selection):
+                    p["cell"] = cells[i]
+
             case "undamaged_elastic_energy":
                 # Define the undamaged elastic energy form
                 sig0 = self.model.sig({"u": self.u0})
@@ -629,12 +648,13 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         self.u0.x.array[:] = self.u.x.array
         self.u0.x.scatter_forward()
         # Check the constraint
-        if self.constraint == "max_strain_inc":
-            # Update the previous normed strain field
-            self.eps0_normed.interpolate(self.eps0_normed_expr)
-        elif self.constraint == "undamaged_elastic_energy":
-            # Compute the undamaged elastic energy from previous load steps
-            self.e0 = fem.assemble_scalar(self.e0_form)
+        match self.constraint:
+            case "max_strain_inc":
+                # Update the previous normed strain field
+                self.eps0_normed.interpolate(self.eps0_normed_expr)
+            case "undamaged_elastic_energy":
+                # Compute the undamaged elastic energy from previous load steps
+                self.e0 = fem.assemble_scalar(self.e0_form)
 
     def select_control_equation(self):
         """Select the control equation.
@@ -660,6 +680,8 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 control_eq = "load_factor_inc"
             case "max_strain_inc":
                 control_eq = "max_strain_inc" if self.t > 1 else "load_factor_inc"
+            case "nodal_disp_inc":
+                control_eq = "nodal_disp_inc" if self.t > 1 else "load_factor_inc"
             case "undamaged_elastic_energy":
                 control_eq = (
                     "undamaged_elastic_energy" if self.t > 1 else "load_factor_inc"
@@ -726,6 +748,29 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                     )
                 # Choose the load factor as the upper bound
                 self.l = l_max
+
+            case "nodal_disp_inc":
+                # Compute the displacement vector for u2
+                uc2_list = [self.u2.eval(p["pos"], p["cell"]) for p in self.selection]
+                uc2 = np.hstack(uc2_list)
+                # Compute the displacement vector for u1
+                uc1_list = [self.u1.eval(p["pos"], p["cell"]) for p in self.selection]
+                uc1 = np.hstack(uc1_list)
+                # Compute the displacement vector for u0
+                uc0_list = [self.u0.eval(p["pos"], p["cell"]) for p in self.selection]
+                uc0 = np.hstack(uc0_list)
+                # Compute the control terms
+                du22 = np.einsum("i,ij,j", uc2, self.s, uc2)
+                du12 = np.einsum("i,ij,j", uc1 - uc0, self.s, uc2)
+                du11 = np.einsum("i,ij,j", uc1 - uc0, self.s, uc1 - uc0)
+                # Compute the polynomial coefficients
+                a = du22
+                b = 2 * du12
+                c = du11 - self.dtau**2
+                d = b**2 - 4 * a * c
+                # Compute the load factor
+                self.l = (-b + np.sqrt(d)) / (2 * a)
+
             case "undamaged_elastic_energy":
                 if self.t > 1:
                     # Compute the terms of the undamaged elastic energy
