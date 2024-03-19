@@ -32,20 +32,6 @@ class ElasticityProblem(BaseProblem):
         Dictionary containing the state variables.
     """
 
-    def __init__(self, pars):
-        """
-        Initialize the ElasticityProblem solver.
-
-        Parameters
-        ----------
-        pars : dict
-            Dictionary containing parameters for the problem.
-        """
-        # Create the elasticity model
-        self.model = ElasticModel(pars)
-        # Initialise parent class
-        super().__init__(pars)
-
     def define_state_variables(self):
         """
         Define the state variables for the problem.
@@ -60,6 +46,18 @@ class ElasticityProblem(BaseProblem):
         u = fem.Function(self.V_u, name="Displacement")
         # Define the state vector
         self.state = {"u": u}
+
+    def define_model(self, domain):
+        """
+        Define the model for the problem.
+
+        Parameters
+        ----------
+        domain : fragma.Domain.domain
+            Domain object used to initialize heterogeneous properties.
+        """
+        # Create the elasticity model
+        self.model = ElasticModel(self.pars, domain)
 
     def define_subproblems(self):
         """
