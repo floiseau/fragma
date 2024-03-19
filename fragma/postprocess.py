@@ -49,10 +49,14 @@ class PostProcessor:
         self.funcs = {}
         # Initialize dictionary for scalar data
         self.scalar_data = {}
+        # Check the field to export
+        fields = postprocess_pars.get("fields", {})
         # Initialize strain export
-        self.__initialize_strain(domain.mesh, model, state)
+        if "strain" in fields:
+            self.__initialize_strain(domain.mesh, model, state)
         # Initialize stress export
-        self.__initialize_stress(domain.mesh, model, state)
+        if "stress" in fields:
+            self.__initialize_stress(domain.mesh, model, state)
         # Initialize probes dict
         self.__initialize_probes(domain.mesh, state, postprocess_pars)
         # Initialize the reaction forces
