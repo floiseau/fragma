@@ -25,7 +25,7 @@ class BaseModel:
         Lame coefficient mu.
     """
 
-    def __init__(self, pars):
+    def __init__(self, pars, domain):
         """
         Initialize the BaseModel.
 
@@ -33,10 +33,12 @@ class BaseModel:
         ----------
         pars : dict
             Dictionary containing parameters of the material model.
+        domain : fragma.Domain.domain
+            Domain object used to initialize heterogeneous properties.
         """
         # Get elastic parameters
-        self.E = pars["mechanical"]["E"]
-        self.nu = pars["mechanical"]["nu"]
+        self.E = self.parse_parameter(pars["mechanical"]["E"], domain)
+        self.nu = self.parse_parameter(pars["mechanical"]["nu"], domain)
         # Compute Lame coefficient
         self.la = self.E * self.nu / ((1 + self.nu) * (1 - 2 * self.nu))
         self.mu = self.E / (2 * (1 + self.nu))
@@ -53,6 +55,49 @@ class BaseModel:
                     raise ValueError(
                         f'The 2D assumption "{self.assumption}" in unknown'
                     )
+
+    def parse_parameter(self, par, domain):
+        """
+        Parse the given parameter.
+
+        If the parameter is a number (integer or float), returns the raw number.
+        Otherwise, it interprets the parameter as a mathematical expression,
+        parses it using SymPy, and creates a finite element function representing
+        the parsed expression on the given domain.
+
+        Parameters
+        ----------
+        par : int, float, or sympy.Expr
+            The parameter to parse. If it's a number, it will be returned as is.
+            If it's a SymPy expression, it will be parsed and represented as a
+            finite element function.
+        domain : fragma.Domain.domain
+            The domain on which to interpolate the parsed parameter.
+
+        Returns
+        -------
+        par_value : int, float, or dolfinx.Function
+            The parsed parameter. If the parameter is a number, it will be returned
+            as is. If it's a SymPy expression, it will be represented as a finite
+            element function.
+        """
+        # Check if the parameter is a number
+        if isinstance(par, (int, float)):
+            # Return the parameter as is
+            return par
+        else:
+            # Declare the coordinate symbol
+            x = sp.Symbol("x")
+            # Parse the expression using sympy
+            par_lambda = sp.utilities.lambdify(x, par, "numpy")
+            # Define the function space
+            par_elem = ufl.FiniteElement("DG", domain.mesh.ufl_cell(), 0)
+            V_par = fem.FunctionSpace(domain.mesh, par_elem)
+            # Create the fem function
+            par_func = fem.Function(V_par)
+            par_func.interpolate(par_lambda)
+            # Return the fem function
+            return par_func
 
     def eps(self, state):
         """
@@ -142,18 +187,6 @@ class ElasticModel(BaseModel):
         Dictionary containing parameters of the material model.
     """
 
-    def __init__(self, pars):
-        """
-        Initialize the ElasticModel.
-
-        Parameters
-        ----------
-        pars : dict
-            Dictionary containing parameters of the material model.
-        """
-        # Initialise parent class
-        super().__init__(pars)
-
     def elastic_energy(self, state, domain):
         """
         Compute the elastic energy.
@@ -209,7 +242,7 @@ class FractureModel(ElasticModel):
         Dictionary containing parameters of the material model.
     """
 
-    def __init__(self, pars):
+    def __init__(self, pars, domain):
         """
         Initialize the FractureModel.
 
@@ -219,28 +252,30 @@ class FractureModel(ElasticModel):
             Dictionary containing parameters of the material model.
         """
         # Initialise parent class
-        super().__init__(pars)
+        super().__init__(pars, domain)
         # Get the degradation model
         self.deg_model = pars["model"]["model"]
         # Get the residual crack phase
         self.alpha_res = pars["numerical"]["alpha_res"]
         # Get fracture parameters
-        self.ell = pars["mechanical"]["ell"]
+        self.ell = self.parse_parameter(pars["mechanical"]["ell"], domain)
         # Check for anisotropy
         self.is_anisotropic = "theta_0" in pars["mechanical"]
         if not self.is_anisotropic:
             # Get the critical energy release rate
-            self.Gc = pars["mechanical"]["Gc"]
+            self.Gc = self.parse_parameter(pars["mechanical"]["Gc"], domain)
         else:
             # Get the critical energy release rate (min and max)
-            Gc_min = pars["mechanical"]["Gc_min"]
-            Gc_max = pars["mechanical"]["Gc_max"]
+            Gc_min = self.parse_parameter(pars["mechanical"]["Gc_min"], domain)
+            Gc_max = self.parse_parameter(pars["mechanical"]["Gc_max"], domain)
             # Convert to other model parameters
             self.Gc = np.sqrt(1 / 2 * (Gc_min**2 + Gc_max**2))
             self.aG = 1 / 2 * (Gc_max**2 - Gc_min**2) / self.Gc**2
             # Ge the anisotropy angle
             self.theta_0 = (
-                np.deg2rad(pars["mechanical"]["theta_0"])
+                self.parse_parameter(pars["mechanical"]["theta_0"], domain)
+                * np.pi
+                / 180
                 if "theta_0" in pars["mechanical"]
                 else 0
             )
@@ -404,7 +439,7 @@ class FractureModel(ElasticModel):
         # Get state variables
         alpha = state["alpha"]
         # Get the fracture parameters
-        Gc = self.parse_parameter(self.Gc, alpha.function_space)
+        Gc = self.Gc
         ell = self.ell
         cw = self.cw()
         # Compute the anisotropy matrix
@@ -456,43 +491,3 @@ class FractureModel(ElasticModel):
         dissipated_energy = self.fracture_dissipation(state, domain)
         # Define the total energy
         return elastic_energy + dissipated_energy
-
-    def parse_parameter(self, par, V_par):
-        """
-        Parse the given parameter.
-
-        If the parameter is a number (integer or float), returns the raw number.
-        Otherwise, it interprets the parameter as a mathematical expression,
-        parses it using SymPy, and creates a finite element function representing
-        the parsed expression on the given function space.
-
-        Parameters
-        ----------
-        par : int, float, or sympy.Expr
-            The parameter to parse. If it's a number, it will be returned as is.
-            If it's a SymPy expression, it will be parsed and represented as a
-            finite element function.
-        V_par : dolfinx.FunctionSpace
-            The function space on which to interpolate the parsed parameter.
-
-        Returns
-        -------
-        par_value : int, float, or dolfinx.Function
-            The parsed parameter. If the parameter is a number, it will be returned
-            as is. If it's a SymPy expression, it will be represented as a finite
-            element function.
-        """
-        # Check if the parameter is a number
-        if isinstance(par, (int, float)):
-            # Return the parameter as is
-            return par
-        else:
-            # Declare the coordinate symbol
-            x = sp.Symbol("x")
-            # Parse the expression using sympy
-            par_lambda = sp.utilities.lambdify(x, par, "numpy")
-            # Create the fem function
-            par_func = fem.Function(V_par)
-            par_func.interpolate(par_lambda)
-            # Return the fem function
-            return par_func

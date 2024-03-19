@@ -46,20 +46,6 @@ class FractureProblem(BaseProblem):
         Dictionary containing subproblems of the main problem.
     """
 
-    def __init__(self, pars):
-        """
-        Initialize the FractureProblem solver.
-
-        Parameters
-        ----------
-        pars : dict
-            Dictionary containing parameters for the problem.
-        """
-        # Create the elasticity model
-        self.model = FractureModel(pars)
-        # Initialise parent class
-        super().__init__(pars)
-
     def define_state_variables(self):
         """
         Define the state variables for the fracture problem.
@@ -80,6 +66,18 @@ class FractureProblem(BaseProblem):
         alpha = fem.Function(self.V_alpha, name="CrackPhase")
         # Define the state vector
         self.state = {"u": u, "alpha": alpha}
+
+    def define_model(self, domain):
+        """
+        Define the model for the problem.
+
+        Parameters
+        ----------
+        domain : fragma.Domain.domain
+            Domain object used to initialize heterogeneous properties.
+        """
+        # Create the fracture model
+        self.model = FractureModel(self.pars, domain)
 
     def define_subproblems(self):
         """
