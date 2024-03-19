@@ -25,7 +25,6 @@ criterion = "t"
 t_max = 10
 
 [postprocess]
-# TODO fields = ["strain", "stress"]
 reaction_forces = ["left", "right"]
 [postprocess.probes]
 displacement= [
