@@ -699,8 +699,9 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         the optimal iteration number to the iteration number of the previous load step.
         """
         # Check the step size adapation must be started
-        if not self.step_size_adapation_enabled and self.k_nm1 > self.k_opt / 2:
-            self.step_size_adapation_enabled = True
+        if not self.step_size_adapation_enabled:
+            self.step_size_adapation_enabled &= self.t > 2
+            self.step_size_adapation_enabled = self.k_nm1 > self.k_opt / 2
         # Adapt the step size dtau
         if self.step_size_adapation_enabled:
             # Compute and apply the adaptation coefficient
@@ -825,6 +826,8 @@ class CrackPhaseSubProblem:
         model : BaseModel
             The material model used in the simulation.
         """
+        # Define the initial crack field
+        self.define_initial_crack_field(pars, domain, state, model)
         # Define the boundary conditions functions
         bcs_alpha = self.define_boundary_condition_functions(domain, state)
         # Define the crack phase problem
@@ -896,6 +899,57 @@ class CrackPhaseSubProblem:
         # Store the problem on alpha in subproblems
         self.problem_alpha = problem_alpha
 
+    def define_initial_crack_field(self, pars, domain, state, model):
+        """Define the initial crack field.
+
+        This method computes the initial crack field based on the provided initial crack configuration
+        and assigns it to the crack phase variable `alpha`.
+
+        Parameters
+        ----------
+        pars : dict
+            Dictionary containing parameters for configuring the initial crack field.
+        domain : Domain
+            The domain object representing the computational domain.
+        state : dict
+            Dictionary containing state variables.
+        model : fragma.models.BaseModel
+            The material model used in the simulation.
+        """
+        # Get the crack phase
+        alpha = state["alpha"]
+        # Get the value of ell
+        ell = model.ell
+        # Get the mesh coordinate
+        x = ufl.SpatialCoordinate(domain.mesh)
+        # Get the cracks
+        initial_cracks = pars.get("initial_cracks", [])
+
+        # Define the distance
+        def alpha_init(x):
+            # Initialize the crack phase field
+            a = np.zeros((x.shape[1],))
+            for name, crack in initial_cracks.items():
+                # Get points of the crack
+                c1 = np.array(crack[0])
+                c2 = np.array(crack[1])
+                # Compute the curvilinear abscissa of the orthogonal projection of x on the crack
+                c1_x = (x - c1[:, np.newaxis]).transpose()
+                t1 = np.dot(c1_x, c2 - c1) / np.linalg.norm(c2 - c1) ** 2
+                # Clip t
+                t = np.clip(t1, 0, 1)
+                # Compute the position of the orthogonal projection
+                x_c = np.outer(c1, 1 - t) + np.outer(c2, t)
+                # Compute the distance to the current crack
+                d = np.linalg.norm(x - x_c, axis=0)
+                # Compute the crack contribution to the crack field
+                a_new = np.clip(1 - d / ell, 0, 1)
+                a = np.maximum(a, a_new)
+            return a
+
+        # Interpolate the initial crack field on alpha
+        alpha.interpolate(alpha_init)
+
     def define_boundary_condition_functions(self, domain, state):
         """
         Define boundary condition functions for the crack phase sub-problem.
@@ -915,9 +969,6 @@ class CrackPhaseSubProblem:
             List of boundary conditions for the crack phase sub-problem.
         """
         print("\n████ INITIALISATION OF THE CRACK FIELD")
-        # Initialize the crack field
-        with state["alpha"].vector.localForm() as alpha_local:
-            alpha_local.set(0.0)
         # Initialize the crack bcs
         bcs_alpha = []
         # Get the dimensions of domain and facets
