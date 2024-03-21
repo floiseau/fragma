@@ -2,10 +2,10 @@
 // Geometry
 L = 1;
 // Mechanical
-ell = 0.05;
+ell = 0.02;
 // Numerical
 h = ell;
-h_min = ell/10;
+h_min = ell/5;
 
 //// Points
 // Bot
