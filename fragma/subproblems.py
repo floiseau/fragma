@@ -706,8 +706,8 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         """
         # Check the step size adapation must be started
         if not self.step_size_adapation_enabled:
-            self.step_size_adapation_enabled &= self.t > 2
-            self.step_size_adapation_enabled = self.k_nm1 > self.k_opt / 2
+            self.step_size_adapation_enabled = self.t > 2
+            self.step_size_adapation_enabled &= self.k_nm1 > self.k_opt / 2
         # Adapt the step size dtau
         if self.step_size_adapation_enabled:
             # Compute and apply the adaptation coefficient
