@@ -615,14 +615,20 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         # Create the displacement at previous load step
         self.u0 = self.u.copy()
         # Define displacement functions
-        self.ui = self.u.copy()
         self.u1 = self.u.copy()
         self.u2 = self.u.copy()
-        # Generate an modified state with ui instead of u
-        modified_state = state.copy()
-        modified_state["u"] = self.ui
-        # Define the problem using the parent class
-        super().define_problem(domain, modified_state, model, bcs_u)
+        # Define the u1 problem using the parent class
+        state1 = state.copy()
+        state1["u"] = self.u1
+        super().define_problem(domain, state1, model, bcs_u)
+        self.problem_u1 = self.problem_u
+        delattr(self, "problem_u")
+        # Define the u2 problem using the parent class
+        state2 = state.copy()
+        state2["u"] = self.u2
+        super().define_problem(domain, state2, model, bcs_u)
+        self.problem_u2 = self.problem_u
+        delattr(self, "problem_u")
 
     def update(self, t: float):
         """
@@ -719,13 +725,11 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         # Set boundary conditions to 0
         self.update_boundary_conditions(0.0)
         # Get the displacement increment
-        self.problem_u.solve()
-        self.ui.vector.copy(self.u1.vector)
+        self.problem_u1.solve()
         # Set boundary conditions to 1
         self.update_boundary_conditions(1.0)
         # Get the displacement increment
-        self.problem_u.solve()
-        self.ui.vector.copy(self.u2.vector)
+        self.problem_u2.solve()
         # Computation of the incremement of load factor
         match self.control_eq:
             case "load_factor_inc":
