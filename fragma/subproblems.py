@@ -923,16 +923,18 @@ class CrackPhaseSubProblem:
         # Get the mesh coordinate
         x = ufl.SpatialCoordinate(domain.mesh)
         # Get the cracks
-        initial_cracks = pars.get("initial_cracks", [])
+        initial_cracks = pars.get("initial_crack", [])
 
-        # Define the distance
+        # Define the initial crack field
         def alpha_init(x):
             # Initialize the crack phase field
             a = np.zeros((x.shape[1],))
-            for name, crack in initial_cracks.items():
+            for crack in initial_cracks:
                 # Get points of the crack
-                c1 = np.array(crack[0])
-                c2 = np.array(crack[1])
+                c1 = np.array(crack["p1"])
+                c2 = np.array(crack["p2"])
+                # Get the width of the crack
+                w = crack["width"]
                 # Compute the curvilinear abscissa of the orthogonal projection of x on the crack
                 c1_x = (x - c1[:, np.newaxis]).transpose()
                 t1 = np.dot(c1_x, c2 - c1) / np.linalg.norm(c2 - c1) ** 2
@@ -943,11 +945,12 @@ class CrackPhaseSubProblem:
                 # Compute the distance to the current crack
                 d = np.linalg.norm(x - x_c, axis=0)
                 # Compute the crack contribution to the crack field
-                a_new = np.clip(1 - d / ell, 0, 1)
+                a_new = np.where(d < w, 1, 0)
+                # Update the crack field
                 a = np.maximum(a, a_new)
             return a
 
-        # Interpolate the initial crack field on alpha
+        # Interpolate the initial crack field onto alpha
         alpha.interpolate(alpha_init)
 
     def define_boundary_condition_functions(self, domain, state):
