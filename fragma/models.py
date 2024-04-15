@@ -254,7 +254,16 @@ class FractureModel(ElasticModel):
         # Initialise parent class
         super().__init__(pars, domain)
         # Get the degradation model
-        self.deg_model = pars["model"]["model"]
+        model_par = pars["model"]["model"]
+        if model_par in ["AT1", "AT2"]:
+            self.deg_model = "AT"
+        else:
+            self.deg_model = model_par.split("-")[0]
+        # Get the dissipation model
+        if model_par in ["AT1", "AT2"]:
+            self.dis_model = model_par
+        else:
+            self.dis_model = model_par.split("-")[1]
         # Get the residual crack phase
         self.alpha_res = pars["numerical"]["alpha_res"]
         # Get fracture parameters
@@ -298,10 +307,12 @@ class FractureModel(ElasticModel):
         alpha_res = self.alpha_res
         # Compute a
         match self.deg_model:
-            case "AT1":
+            case "AT":
                 return (1 - alpha) ** 2 + alpha_res
-            case "AT2":
-                return (1 - alpha) ** 2 + alpha_res
+            case "KKL":
+                return 4 * (1 - alpha) ** 3 - 4 * (1 - alpha) ** 3 + alpha_res
+            case "KSM":
+                return 3 * (1 - alpha) ** 2 - 3 * (1 - alpha) ** 2 + alpha_res
             case _:
                 raise ValueError(
                     f"The degradation model named '{self.deg_model}' does not exists."
@@ -323,10 +334,12 @@ class FractureModel(ElasticModel):
         """
         # Compute w
         match self.deg_model:
-            case "AT1":
+            case "AT":
                 return -2 * (1 - alpha)
-            case "AT2":
-                return -2 * (1 - alpha)
+            case "KKL":
+                return -12 * (1 - alpha) ** 2 + 12 * (1 - alpha) ** 3
+            case "KSM":
+                return -6 * (1 - alpha) + 6 * (1 - alpha) ** 2
             case _:
                 raise ValueError(
                     f"The degradation model named '{self.deg_model}' does not exists."
@@ -347,14 +360,16 @@ class FractureModel(ElasticModel):
             Dissipation function.
         """
         # Compute w
-        match self.deg_model:
+        match self.dis_model:
             case "AT1":
                 return alpha
             case "AT2":
                 return alpha**2
+            case "DW":
+                return 16 * alpha**2 * (1 - alpha) ** 2
             case _:
                 raise ValueError(
-                    f"The degradation model named '{self.deg_model}' does not exists."
+                    f"The degradation model named '{self.dis_model}' does not exists."
                 )
 
     def wp(self, alpha):
@@ -372,14 +387,16 @@ class FractureModel(ElasticModel):
             Derivative of the dissipation function.
         """
         # Compute w
-        match self.deg_model:
+        match self.dis_model:
             case "AT1":
                 return 1
             case "AT2":
                 return 2 * alpha
+            case "DW":
+                return 16 * (2 * alpĥa * (1 - alpha) ** 2 - 2 * alpha**2 * (1 - alpha))
             case _:
                 raise ValueError(
-                    f"The degradation model named '{self.deg_model}' does not exists."
+                    f"The degradation model named '{self.dis_model}' does not exists."
                 )
 
     def cw(self):
@@ -391,14 +408,16 @@ class FractureModel(ElasticModel):
         float
             Normalization coefficient.
         """
-        match self.deg_model:
+        match self.dis_model:
             case "AT1":
                 return 8 / 3
             case "AT2":
                 return 2
+            case "DW":
+                return 4 * 2/3
             case _:
                 raise ValueError(
-                    f"The degradation model named '{self.deg_model}' does not exists."
+                    f"The degradation model named '{self.dis_model}' does not exists."
                 )
 
     def sig_eff(self, state):
