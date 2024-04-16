@@ -3,6 +3,7 @@ Module for defining sub-problems related to displacement and crack phase evoluti
 
 This module provides classes for defining sub-problems that solve for displacement and crack phase evolution.
 """
+
 from math import isnan
 
 import numpy as np
@@ -436,6 +437,8 @@ class DisplacementSubProblem:
         problem_u.A.setOption(PETSc.Mat.Option.SPD, True)  # type: ignore
         # Set block size
         problem_u.A.setBlockSize(V_u.mesh.geometry.dim)
+        # Set nonzero initial guess
+        problem_u.solver.setInitialGuessNonzero(True)
         # Display information about the displacement solver
         problem_u.solver.view()
         # Store the problem
@@ -615,20 +618,14 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         # Create the displacement at previous load step
         self.u0 = self.u.copy()
         # Define displacement functions
+        self.ui = self.u.copy()
         self.u1 = self.u.copy()
         self.u2 = self.u.copy()
-        # Define the u1 problem using the parent class
-        state1 = state.copy()
-        state1["u"] = self.u1
-        super().define_problem(domain, state1, model, bcs_u)
-        self.problem_u1 = self.problem_u
-        delattr(self, "problem_u")
-        # Define the u2 problem using the parent class
-        state2 = state.copy()
-        state2["u"] = self.u2
-        super().define_problem(domain, state2, model, bcs_u)
-        self.problem_u2 = self.problem_u
-        delattr(self, "problem_u")
+        # Generate an modified state with ui instead of u
+        modified_state = state.copy()
+        modified_state["u"] = self.ui
+        # Define the problem using the parent class
+        super().define_problem(domain, modified_state, model, bcs_u)
 
     def update(self, t: float):
         """
@@ -653,6 +650,8 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         # Store the displacement at the beginning of load step
         self.u0.x.array[:] = self.u.x.array
         self.u0.x.scatter_forward()
+        # Store the load factor at the beginning of the load step
+        self.l0 = self.l
         # Check the constraint
         match self.constraint:
             case "max_strain_inc":
@@ -720,22 +719,25 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
 
     def solve(self):
         """Solve the partitioned displacement subproblem."""
-        # Store the previous load factor
-        self.l0 = self.l
         # Set boundary conditions to 0
         self.update_boundary_conditions(0.0)
-        # Get the displacement increment
-        self.problem_u1.solve()
+        # Solve the prescribed displacement problem
+        self.ui.x.array[:] = self.u1.x.array[:]
+        self.problem_u.solve()
+        self.u1.x.array[:] = self.ui.x.array
         # Set boundary conditions to 1
         self.update_boundary_conditions(1.0)
-        # Get the displacement increment
-        self.problem_u2.solve()
+        # Solve the controlled displacement problem
+        self.ui.x.array[:] = self.u2.x.array
+        self.problem_u.solve()
+        self.u2.x.array[:] = self.ui.x.array
         # Computation of the incremement of load factor
         match self.control_eq:
             case "load_factor_inc":
                 if self.k == 1 and self.t >= 1:
                     # Increment the load factor
                     self.l += self.dl
+
             case "max_strain_inc":
                 # Update the coefficients
                 self.a0.interpolate(self.a0_expr)
@@ -887,6 +889,7 @@ class CrackPhaseSubProblem:
         problem_alpha.getKSP().setTolerances(atol=1e-15, rtol=1e-15)
         problem_alpha.getKSP().getPC().setType("mg")
         problem_alpha.getKSP().getPC().setMGLevels(1)
+        problem_alpha.getKSP().setInitialGuessNonzero(True)
 
         # Define lower and upper bounds functions for the crack phase field
         self.alpha_lb = alpha.copy()
