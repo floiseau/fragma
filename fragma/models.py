@@ -393,7 +393,9 @@ class FractureModel(ElasticModel):
             case "AT2":
                 return 2 * alpha
             case "DW":
-                return 16 * (2 * alpĥa * (1 - alpha) ** 2 - 2 * alpha**2 * (1 - alpha))
+                return 16 * (
+                    2 * alpĥa * (1 - alpha) ** 2 - 2 * alpha**2 * (1 - alpha)
+                )
             case _:
                 raise ValueError(
                     f"The degradation model named '{self.dis_model}' does not exists."
@@ -414,7 +416,7 @@ class FractureModel(ElasticModel):
             case "AT2":
                 return 2
             case "DW":
-                return 4 * 2/3
+                return 4 * 2 / 3
             case _:
                 raise ValueError(
                     f"The degradation model named '{self.dis_model}' does not exists."

@@ -66,12 +66,12 @@ def run_simulation(Ri_Re, N):
 if __name__ == "__main__":
     # Set the parameters
     a = 0.05
-    Ri_Re_list = [(a/4, a/2), (a/8, a/4), (a/16, a/8), (a/32, a/16)]
+    Ri_Re_list = [(a / 4, a / 2), (a / 8, a / 4), (a / 16, a / 8), (a / 32, a / 16)]
     N_list = [32, 64, 128]
 
     # Generate the combinations of parameters
     args = list(reversed(list(itertools.product(Ri_Re_list, N_list))))
 
     # Run the simulation in parallel
-    with Pool(min(len(args), os.cpu_count()-4)) as p:
+    with Pool(min(len(args), os.cpu_count() - 4)) as p:
         p.starmap(run_simulation, args)

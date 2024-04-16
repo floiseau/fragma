@@ -6,7 +6,7 @@ from matplotlib import cm
 
 # Parameters
 a = 0.05
-Ri_Re_list = [(a/4, a/2), (a/8, a/4), (a/16, a/8), (a/32, a/16)]
+Ri_Re_list = [(a / 4, a / 2), (a / 8, a / 4), (a / 16, a / 8), (a / 32, a / 16)]
 N_list = [32, 64, 128]
 
 # Generate the combination of parameters
@@ -37,12 +37,9 @@ for i, (Ri_Re, N) in enumerate(pars):
 
 # Display the results
 fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-scatter = ax.scatter(
-    N_res, Ri_res, T_res,
-    linewidth=0, antialiased=False)
+ax = fig.add_subplot(111, projection="3d")
+scatter = ax.scatter(N_res, Ri_res, T_res, linewidth=0, antialiased=False)
 ax.set_xlabel("$N$")
 ax.set_ylabel("$R_i$")
 ax.set_zlabel("$T$")
 plt.show()
-
