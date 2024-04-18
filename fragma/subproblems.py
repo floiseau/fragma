@@ -516,10 +516,6 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
             self.dtau_min = pars["loading"].get("dtau_min", 0)
         # Constraint-specific initialization
         match self.constraint:
-            case "load_factor_inc":
-                # Get the load factor increment
-                self.dl = pars["loading"]["dl"]
-
             case "max_strain_inc":
                 # Generate a function space for strain-like scalars
                 eps_ufl = model.eps(state)
@@ -570,6 +566,9 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # Store the cells in selection
                 for i, p in enumerate(self.selection):
                     p["cell"] = cells[i]
+
+            case "energy_release":
+                self.beta = pars["loading"]["beta"]
 
             case "undamaged_elastic_energy":
                 # Define the undamaged elastic energy form
@@ -650,6 +649,8 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         # Store the displacement at the beginning of load step
         self.u0.x.array[:] = self.u.x.array
         self.u0.x.scatter_forward()
+        # Store the nodal forces at the beginning of the load step
+        self.f0 = self.l * self.problem_u.b.array
         # Store the load factor at the beginning of the load step
         self.l0 = self.l
         # Check the constraint
@@ -687,6 +688,8 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 control_eq = "max_strain_inc" if self.t > 1 else "load_factor_inc"
             case "nodal_disp_inc":
                 control_eq = "nodal_disp_inc" if self.t > 1 else "load_factor_inc"
+            case "energy_release":
+                control_eq = "energy_release" if self.t > 1 else "load_factor_inc"
             case "undamaged_elastic_energy":
                 control_eq = (
                     "undamaged_elastic_energy" if self.t > 1 else "load_factor_inc"
@@ -778,6 +781,30 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # Compute the load factor
                 self.l = (-b + np.sqrt(d)) / (2 * a)
 
+            case "energy_release":
+                # Get the RHS
+                f0 = self.f0
+                f = self.problem_u.b.array[:]
+                # Compute the displacement increment
+                u0 = self.u0.x.array[:]
+                u2 = self.u2.x.array[:]
+                # Compute scalar products
+                f0_u0 = np.dot(f0, u0)
+                f_u0 = np.dot(f, u0)
+                f0_u2 = np.dot(f0, u2)
+                f_u2 = np.dot(f, u2)
+                # Compute the polynomial coefficients
+                a = self.beta * f_u2
+                b = f0_u2 - f_u0
+                c = -self.beta * f0_u0 - 2 * self.dtau
+                d = b**2 - 4 * a * c
+                self.l = (-b + np.sqrt(d)) / (2 * a)
+                # dU = 1 / 2 * (self.l**2 * f_u2 - f0_u0)
+                # dD = 1 / 2 * self.l * (f0_u2 - f_u0)
+                # print(
+                #     f"New: {dU=:.3g}; {dD=:.3g}; {dD + beta*dU=:.3g}; {dtau=:.3g}; {d=:.3g}"
+                # )
+
             case "undamaged_elastic_energy":
                 if self.t > 1:
                     # Compute the terms of the undamaged elastic energy
@@ -792,6 +819,7 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                     d = b**2 - 4 * a * c
                     # Compute the ideal load factor
                     self.l = (-b + np.sqrt(d)) / (2 * a)
+
         # Update the displacement
         self.u.x.array[:] = self.u1.x.array + self.l * self.u2.x.array
         self.u.x.scatter_forward()
