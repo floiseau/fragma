@@ -63,6 +63,8 @@ class PostProcessor:
         self.__initialize_reaction_forces(domain, model, state, postprocess_pars)
         # Initialize the energies computations
         self.__initialize_energies(domain, model, state)
+        # Initialize the SIFs computation
+        self.__initialize_SIFs(domain, model, state, postprocess_pars)
         # Initialize the energy release rate computation
         self.__initialize_energy_release_rate(domain, model, state, postprocess_pars)
         # Initialize the T-stress computation
@@ -242,6 +244,116 @@ class PostProcessor:
         for name, form in self.energies_forms.items():
             self.scalar_data[name] = fem.assemble_scalar(form)
 
+    def __initialize_SIFs(self, domain, model, state, postprocess_pars):
+        """
+        Initialize the computation of the stress intensity factors.
+
+        This method is based on the interaction integral.
+        The implementation of this method is based in [1]__ and the implementation of Pietro Gazzi.
+
+        Parameters
+        ----------
+        domain : Domain
+            The domain object containing the mesh and information on the boundaries.
+        model: BaseModel
+            The material model.
+        state : dict
+            Dictionary containing state variables.
+        postprocess_pars : dict
+            Dictionary containing parameters for post-processing.
+
+        .. [1] De Lorenzis, L., Maurini, C. (2021). Basic computational methods for fracture mechanics. NEWFRAC Core School 2021 Course, Notebook 2-LEFM, https://gitlab.com/newfrac/CORE-school/newfrac-core-numerics/-/blob/master/02-LEFM.ipynb.
+        """
+        # Check if the energy release rate must be computated
+        if "SIFs" not in postprocess_pars:
+            return
+        # Read the parameters
+        xc = np.array(postprocess_pars["SIFs"]["crack_tip"])
+        R_int = postprocess_pars["SIFs"]["R_int"]
+        R_ext = postprocess_pars["SIFs"]["R_ext"]
+        phi0 = np.deg2rad(postprocess_pars["SIFs"]["crack_growth_angle"])
+        # Get the theta field
+        theta_field = self.compute_theta_field(domain, xc, R_int, R_ext)
+        theta = ufl.as_vector([ufl.cos(phi0), ufl.sin(phi0)]) * theta_field
+        # Compute auxialiary displacement fields
+        u_I_aux = self.compute_auxiliary_displacement_field(
+            domain, model, xc, phi0, K_I_aux=1, K_II_aux=0
+        )
+        u_II_aux = self.compute_auxiliary_displacement_field(
+            domain, model, xc, phi0, K_I_aux=0, K_II_aux=1
+        )
+        # Get the displacement field
+        u = state["u"]
+        # Compute the I-integrals
+        I_I = self.compute_I_integral(domain, model, u, u_I_aux, theta)
+        I_II = self.compute_I_integral(domain, model, u, u_II_aux, theta)
+        # Compute Ep
+        match model.assumption:
+            case "plane_stress":
+                Ep = model.E
+            case "plane_strain":
+                Ep = model.E / (1 - model.nu**2)
+        # Store the forms
+        self.K_I_form = fem.form(Ep / 2 * I_I)
+        self.K_II_form = fem.form(Ep / 2 * I_II)
+        # Compute the SIFs
+        self.scalar_data["K_I"] = fem.assemble_scalar(self.K_I_form)
+        self.scalar_data["K_II"] = fem.assemble_scalar(self.K_II_form)
+
+    def compute_auxiliary_displacement_field(
+        self, domain, model, xc, phi0, K_I_aux, K_II_aux
+    ):
+        # Get the polar coordinates
+        x = ufl.SpatialCoordinate(domain.mesh)
+        x_tip = ufl.as_vector(xc[:2])
+        r_vec = x - x_tip
+        r = ufl.sqrt(ufl.dot(r_vec, r_vec))
+        theta = ufl.atan2(r_vec[1], r_vec[0]) - phi0
+        # Get the elastic parameters
+        mu = model.mu
+        # Get kappa
+        nu = model.nu
+        match model.assumption:
+            case "plane_stress":
+                ka = (3 - nu) / (1 + nu)
+            case "plane_strain":
+                ka = 3 - 4 * nu
+        # Compute the function f
+        f_I, f_II = [0, 0], [0, 0]
+        f_I[0] = (ka - ufl.cos(theta)) / (2 * mu) * ufl.cos(theta / 2)
+        f_I[1] = (ka - ufl.cos(theta)) / (2 * mu) * ufl.sin(theta / 2)
+        f_II[0] = (2 + ka + ufl.cos(theta)) / (2 * mu) * ufl.sin(theta / 2)
+        f_II[1] = (2 - ka - ufl.cos(theta)) / (2 * mu) * ufl.cos(theta / 2)
+        # Compute the displacement field
+        ui = [
+            ufl.sqrt(r / (2 * np.pi)) * (K_I_aux * f_I[i] + K_II_aux * f_II[i])
+            for i in range(2)
+        ]
+        return ufl.as_vector(ui)
+
+    def compute_I_integral(self, domain, model, u, u_aux, theta):
+        # Compute the gradients
+        grad_u = ufl.grad(u)
+        grad_u_aux = ufl.grad(u_aux)
+        # Compute the strains
+        eps = ufl.sym(grad_u)
+        eps_aux = ufl.sym(grad_u_aux)
+        # Compute the stresses
+        sig = model.sig({"u": u})
+        sig_aux = model.sig({"u": u_aux})
+        # Compute theta gradient and div
+        div_theta = ufl.div(theta)
+        grad_theta = ufl.grad(theta)
+        # Compute the terms of the interaction integral
+        dx = ufl.dx(domain=domain.mesh)
+        Iw12 = 1 / 2 * ufl.inner(sig, eps_aux) * div_theta * dx
+        Iw21 = 1 / 2 * ufl.inner(sig_aux, eps) * div_theta * dx
+        Ig12 = ufl.inner(sig, grad_u_aux * grad_theta) * dx
+        Ig21 = ufl.inner(sig_aux, grad_u * grad_theta) * dx
+        # Compute the interaction integral expression
+        I_expr = Ig12 + Ig21 - Iw12 - Iw21
+        return I_expr
+
     def __initialize_energy_release_rate(self, domain, model, state, postprocess_pars):
         """
         Initialize the computation of the energy release rate.
@@ -263,7 +375,7 @@ class PostProcessor:
         .. [1] De Lorenzis, L., Maurini, C. (2021). Basic computational methods for fracture mechanics. NEWFRAC Core School 2021 Course, Notebook 2-LEFM, https://gitlab.com/newfrac/CORE-school/newfrac-core-numerics/-/blob/master/02-LEFM.ipynb.
         """
         # Check if the energy release rate must be computated
-        if not "energy_release_rate" in postprocess_pars:
+        if "energy_release_rate" not in postprocess_pars:
             return
         # Check the dimension of the domain
         if domain.mesh.geometry.dim == 3:
@@ -372,7 +484,7 @@ class PostProcessor:
         .. [1] De Lorenzis, L., Maurini, C. (2021). Basic computational methods for fracture mechanics. NEWFRAC Core School 2021 Course, Notebook 2-LEFM, https://gitlab.com/newfrac/CORE-school/newfrac-core-numerics/-/blob/master/02-LEFM.ipynb.
         """
         # Check if the energy release rate must be computated
-        if not "T_stress" in postprocess_pars:
+        if "T_stress" not in postprocess_pars:
             return
         # Check the dimension of the domain
         if domain.mesh.geometry.dim == 3:
@@ -468,6 +580,11 @@ class PostProcessor:
         # Compute the T-stress
         if "T_stress" in self.scalar_data:
             self.scalar_data["T_stress"] = fem.assemble_scalar(self.T_form)
+        # Compute SIFs
+        if "K_I" in self.scalar_data:
+            self.scalar_data["K_I"] = fem.assemble_scalar(self.K_I_form)
+        if "K_II" in self.scalar_data:
+            self.scalar_data["K_II"] = fem.assemble_scalar(self.K_II_form)
 
 
 class Probes:
