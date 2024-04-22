@@ -325,28 +325,34 @@ class DisplacementSubProblem:
         external_work = 0.0
         # Initialize functions
         self.bcf_funcs = {}
-        # Iterate through the forces
-        for facet_name, f_imp in self.f_imp_max.items():
-            # Get the facets tags
-            facet = boundary_facets[facet_name]
-            facet_tags = dolfinx.mesh.meshtags(
-                domain.mesh,
-                domain.mesh.geometry.dim - 1,
-                facet,
-                np.full_like(facet, 1, dtype=np.int32),
-            )
+        # Create the mesh tags
+        facets = np.concatenate(
+            [boundary_facets[facet_name] for facet_name in self.f_imp_max],
+            dtype=np.int32,
+        )
+        facet_ids = np.concatenate(
+            [
+                [id + 1] * len(boundary_facets[facet_name])
+                for id, facet_name in enumerate(self.f_imp_max)
+            ],
+            dtype=np.int32,
+        )
+        facet_tags = dolfinx.mesh.meshtags(
+            domain.mesh,
+            domain.mesh.geometry.dim - 1,
+            facets,
+            facet_ids,
+        )
+        # Get the surface integrand
+        ds = ufl.Measure("ds", domain=domain.mesh, subdomain_data=facet_tags)
+        # Apply the forces
+        for id, (facet_name, f_imp) in enumerate(self.f_imp_max.items()):
+            print(id, facet_name, f_imp)
             # Create the load function
             f = fem.Constant(domain.mesh, np.array(f_imp, dtype=default_scalar_type))
             self.bcf_funcs[facet_name] = f
-            # Get the associated integrand
-            ds = ufl.Measure(
-                "ds",
-                domain=domain.mesh,
-                subdomain_data=facet_tags,
-                subdomain_id=1,
-            )
             # Add the cohtribution to the external work
-            external_work += ufl.dot(f, u) * ds
+            external_work += ufl.dot(f, u) * ds(id + 1)
 
         # Iterate through the forces
         for facet_name, fc in self.fc_max.items():
@@ -953,10 +959,6 @@ class CrackPhaseSubProblem:
         """
         # Get the crack phase
         alpha = state["alpha"]
-        # Get the value of ell
-        ell = model.ell
-        # Get the mesh coordinate
-        x = ufl.SpatialCoordinate(domain.mesh)
         # Get the cracks
         initial_cracks = pars.get("initial_crack", [])
 
@@ -1010,7 +1012,6 @@ class CrackPhaseSubProblem:
         # Initialize the crack bcs
         bcs_alpha = []
         # Get the dimensions of domain and facets
-        dim = domain.mesh.geometry.dim
         fdim = domain.mesh.geometry.dim - 1
         # Get the crack phase function space
         V_alpha = state["alpha"].function_space
