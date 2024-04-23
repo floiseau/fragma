@@ -34,8 +34,10 @@ p2 = [1, 0.5, 0]
 width = 0.004
 
 [loading]
-lock_point = [0, 0, 0]
 dl = 0.01
+[loading.nodal_displacement]
+lock_point.x = [0, 0, 0]
+lock_point.u = [0, 0]
 [loading.u_imp_max]
 bot = [nan, 0]
 top = [nan, 1e-4]

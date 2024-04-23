@@ -20,7 +20,9 @@ E = 230.77e9
 nu = 0.43
 
 [loading]
-lock_point = [0, 0, 0]
+[loading.nodal_displacement]
+lock_point.x = [0, 0, 0]
+lock_point.u = [0, 0]
 [loading.u_imp_max]
 bot = [nan, 0]
 [loading.f_imp_max]
