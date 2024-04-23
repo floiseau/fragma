@@ -347,7 +347,6 @@ class DisplacementSubProblem:
         ds = ufl.Measure("ds", domain=domain.mesh, subdomain_data=facet_tags)
         # Apply the forces
         for id, (facet_name, f_imp) in enumerate(self.f_imp_max.items()):
-            print(id, facet_name, f_imp)
             # Create the load function
             f = fem.Constant(domain.mesh, np.array(f_imp, dtype=default_scalar_type))
             self.bcf_funcs[facet_name] = f
