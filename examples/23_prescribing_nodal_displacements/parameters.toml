@@ -1,0 +1,27 @@
+[model]
+name = "elasticity"
+dim = 2
+2D_assumption = "plane_strain"
+
+[mesh]
+msh_file = "mesh.msh"
+
+[mesh.physical_groups]
+top  = 10
+
+[mechanical]
+E = 1
+nu = 0.3
+
+[loading]
+[loading.nodal_displacement]
+bot_left.x  = [0, 0, 0]
+bot_left.u  = [0, 0]
+bot_right.x  = [1, 0, 0]
+bot_right.u  = [nan, 0]
+[loading.f_imp_max]
+top  = [0, 1]
+
+[end]
+criterion = "t"
+t_max = 10
