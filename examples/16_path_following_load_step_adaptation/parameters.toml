@@ -25,11 +25,13 @@ Gc = 2.7e3
 ell = 0.015e-3
 
 [loading]
-lock_point = [0, 0, 0]
 constraint = "max_strain_inc"
 dl = 1e-2
 dtau = 2e-3
 k_opt = 24
+[loading.nodal_displacement]
+origin.x = [0, 0, 0]
+origin.u = [0, 0]
 [loading.u_imp_max]
 bot = [nan, 0]
 top = [nan, 0.006e-3]

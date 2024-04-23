@@ -7,10 +7,13 @@ The calculation are based on the $G-\theta$ method.
 Here a Single Edge Notched Tension (SENT) specimen is considered.
 To obtain the energy release rate under a displacement loading, the `postprocess` section of the paramter file must be filled as shown below
 ```toml
-V_in = ...
-V_tr = ...
+[postprocess.energy_release_rate]
+crack_tip = [0.25e-3, 0.5e-3, 0]
+R_int = 6.4e-6
+R_ext = 1.28e-5
+crack_growth_angle = 0
 ```
-where `V_in` is the (generalized) volume in which the $\theta$ field is equal to 1 and `V_tr` is the transition (generalized) volume where $\theta$ goes from 1 to 0.
+where `crack_tip` is the position of the crack tip, `R_int` and `R_ext` bounds the volume in which the $\theta$ field goes from 0 to 1, and `crack_growth_angle` is the direction of the growth.
 
 ## Approximate solution
 According to Liu *et al.* (2015), the fracture toughness can be approximated
@@ -45,12 +48,12 @@ E = 230.77 \times 10^9
 where all quantities are expressed in SI unit.
 
 We obtain $K_I = 42.12 \times 10^6$ Pa.m $^{-\frac{1}{2}}$.
-Using Irwin formula, we obtain the energy release rate $G = 6267$ J/m $^2$.
+Using Irwin formula in plain strain, we obtain the energy release rate $G = 6267$ J/m $^2$.
 
 ## Expected results
 
 In this exemple, the `probes.csv` files contains the energy release rate $G$.
-Running the exemple gives a value around  $G=6269$ J/m $^2$ which is close the approximate solution given by Lui *et al.* (2015).
+Running the exemple gives a value around  $G=6803$ J/m $^2$ which is close the approximate solution given by Lui *et al.* (2015).
 
 ## References
 
