@@ -31,11 +31,14 @@ p2 = [5e-4, 5e-4, 0]
 width = 3.75e-06
 
 [loading]
-lock_point = [0, 0, 0]
 dl = 0.01
 constraint = "energy_release"
 dtau = 0.01
 beta = 1e-4
+
+[loading.nodal_displacement]
+lock_point.x = [0, 0, 0]
+lock_point.u = [0, 0]
 
 [loading.u_imp_max]
 bot = [nan, 0]

@@ -4,9 +4,10 @@ L = 1e-3;
 // Crack tip position
 a = L/4;
 // Numerical
-DefineConstant[ ell_over_h = {2, Min 2, Max 8, Name "Parameters/ell_over_h"}];
-h_min = 2e-7;
+h_min = 1e-7;
 h = 10*h_min;
+R_int = 64 * h_min;
+R_ext = 128 * h_min;
 
 //// Points
 // Bot
@@ -56,13 +57,13 @@ Physical Curve("crack", 13) = {14, 24};
 //// Element size
 // Create a distance field
 Field[1] = Distance;
-Field[1].CurvesList = {13};
+Field[1].PointsList = {14};
 Field[1].Sampling = 100;
 // Use a distance field and a threshold to set the element size
 Field[2] = Threshold;
 Field[2].InField = 1;
-Field[2].DistMin = 3*ell;
-Field[2].DistMax = 8*ell;
+Field[2].DistMin = 1.5*R_ext;
+Field[2].DistMax = 3*R_ext;
 Field[2].SizeMin = h_min;
 Field[2].SizeMax = h;
 // Set the treshold field as the background field

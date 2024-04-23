@@ -130,16 +130,16 @@ class DisplacementSubProblem:
             List of boundary conditions for the displacement sub-problem.
         """
         bcs_u = []
-        # Define a lock point
-        bcs_u += self.define_lock_point(pars, domain, state)
+        # Define boundary conditions for prescribed nodal displacements
+        bcs_u += self.define_prescribed_nodal_displacements(pars, domain, state)
         # Define the boundary conditions functions
         bcs_u += self.define_boundary_condition_functions(domain, state)
         # Return the boundary conditions
         return bcs_u
 
-    def define_lock_point(self, pars, domain, state):
+    def define_prescribed_nodal_displacements(self, pars, domain, state):
         """
-        Define the lock point boundary condition.
+        Define the boundary conditions to prescribe nodal displacement.
 
         Parameters
         ----------
@@ -153,32 +153,50 @@ class DisplacementSubProblem:
         Returns
         -------
         list
-            List of boundary conditions for the lock point.
+            List of boundary conditions for the prescribed nodal displacement.
         """
         # Get the position of the point
-        x0 = pars.get("loading", {}).get("lock_point", None)
-        # Return if there is not lock point
-        if x0 is None:
+        nod_disp_dict = pars.get("loading", {}).get("nodal_displacement", None)
+        # Return if there is no imposed nodal displacement
+        if nod_disp_dict is None:
             return []
+        # Initialize the list of boundary conditions
+        bcs = []
         # Get the state variable
         u = state["u"]
         # Get the function space of the state variable
         V_u = u.function_space
+        # Iterate through the imposed nodal displacements
+        for nd in nod_disp_dict.values():
+            # Get the position
+            x_imp = nd["x"]
+            u_imp = nd["u"]
 
-        # Generate the location function
-        def lock_point(x):
-            return (
-                np.isclose(x[0], x0[0])
-                & np.isclose(x[1], x0[1])
-                & np.isclose(x[2], x0[2])
-            )
+            # Generate the location function
+            def lock_point(x):
+                return (
+                    np.isclose(x[0], x_imp[0])
+                    & np.isclose(x[1], x_imp[1])
+                    & np.isclose(x[2], x_imp[2])
+                )
 
-        # Generate the zero displacement vector
-        u_zero = np.array((0,) * domain.mesh.geometry.dim, dtype=default_scalar_type)
-        # Locate the dof
-        dofs = fem.locate_dofs_geometrical(V_u, lock_point)
-        # Generate the Dirichlet boundary condition
-        return [fem.dirichletbc(u_zero, dofs, V_u)]
+            # Iterate through the components
+            for comp, val in enumerate(u_imp):
+                # Check if the value is nan
+                if isnan(val):
+                    continue
+                # Find the dofs
+                V_comp = V_u.sub(comp).collapse()[0]
+                dofs = fem.locate_dofs_geometrical((V_u.sub(comp), V_comp), lock_point)
+                # Generate the displacement component
+                u_imp_comp = dolfinx.fem.Function(V_comp)
+                with u_imp_comp.vector.localForm() as bc_local:
+                    bc_local.set(val)
+                # Add the new bc
+                new_bc = fem.dirichletbc(u_imp_comp, dofs, V_u)
+                bcs.append(new_bc)
+
+        return bcs
 
     def define_boundary_condition_functions(self, domain, state):
         """
