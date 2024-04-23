@@ -171,7 +171,6 @@ class DisplacementSubProblem:
             # Get the position
             x_imp = nd["x"]
             u_imp = nd["u"]
-
             # Generate the location function
             def lock_point(x):
                 return (
@@ -179,23 +178,17 @@ class DisplacementSubProblem:
                     & np.isclose(x[1], x_imp[1])
                     & np.isclose(x[2], x_imp[2])
                 )
-
             # Iterate through the components
             for comp, val in enumerate(u_imp):
                 # Check if the value is nan
                 if isnan(val):
                     continue
-                # Find the dofs
-                V_comp = V_u.sub(comp).collapse()[0]
-                dofs = fem.locate_dofs_geometrical((V_u.sub(comp), V_comp), lock_point)
-                # Generate the displacement component
-                u_imp_comp = dolfinx.fem.Function(V_comp)
-                with u_imp_comp.vector.localForm() as bc_local:
-                    bc_local.set(val)
                 # Add the new bc
-                new_bc = fem.dirichletbc(u_imp_comp, dofs, V_u)
+                dofs = fem.locate_dofs_geometrical((V_u.sub(comp), V_u), lock_point)[0]
+                print(dofs)
+                u_val = fem.Constant(domain.mesh, default_scalar_type(val))
+                new_bc = fem.dirichletbc(u_val, dofs, V_u.sub(comp))
                 bcs.append(new_bc)
-
         return bcs
 
     def define_boundary_condition_functions(self, domain, state):
