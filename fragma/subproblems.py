@@ -586,6 +586,9 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
             case "energy_release":
                 self.beta = pars["loading"]["beta"]
 
+            case "energy_release_2":
+                self.beta = pars["loading"]["beta"]
+
             case "undamaged_elastic_energy":
                 # Define the undamaged elastic energy form
                 sig0 = self.model.sig({"u": self.u0})
@@ -706,6 +709,8 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 control_eq = "nodal_disp_inc" if self.t > 1 else "load_factor_inc"
             case "energy_release":
                 control_eq = "energy_release" if self.t > 1 else "load_factor_inc"
+            case "energy_release_2":
+                control_eq = "energy_release_2" if self.t > 1 else "load_factor_inc"
             case "undamaged_elastic_energy":
                 control_eq = (
                     "undamaged_elastic_energy" if self.t > 1 else "load_factor_inc"
@@ -815,6 +820,34 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 c = -self.beta * f0_u0 - 2 * self.dtau
                 d = b**2 - 4 * a * c
                 self.l = (-b + np.sqrt(d)) / (2 * a)
+                # dU = 1 / 2 * (self.l**2 * f_u2 - f0_u0)
+                # dD = 1 / 2 * self.l * (f0_u2 - f_u0)
+                # print(
+                #     f"New: {dU=:.3g}; {dD=:.3g}; {dD + beta*dU=:.3g}; {dtau=:.3g}; {d=:.3g}"
+                # )
+
+            case "energy_release_2":
+                # Get the RHS
+                f0 = self.f0
+                f = self.problem_u.b.array[:]
+                # Compute the displacement increment
+                u0 = self.u0.x.array[:]
+                u2 = self.u2.x.array[:]
+                # Compute scalar products
+                f0_u0 = np.dot(f0, u0)
+                f_u0 = np.dot(f, u0)
+                f0_u2 = np.dot(f0, u2)
+                f_u2 = np.dot(f, u2)
+                # Compute the polynomial coefficients
+                a = self.beta**2 * f_u2**2
+                b = -2 * self.beta**2 * f0_u0 * f_u2 + (f0_u2 - f_u0) ** 2
+                c = self.beta**2 * f0_u0**2 - 4 * self.dtau**2
+                d = b**2 - 4 * a * c
+                # Compute the potential roots
+                l1 = np.sqrt((abs(-b + np.sqrt(abs(d))) / (2 * a)))
+                l2 = np.sqrt(abs((-b - np.sqrt(abs(d))) / (2 * a)))
+                # Take the max of the roots
+                self.l = np.nanmax([l1, l2])
                 # dU = 1 / 2 * (self.l**2 * f_u2 - f0_u0)
                 # dD = 1 / 2 * self.l * (f0_u2 - f_u0)
                 # print(
