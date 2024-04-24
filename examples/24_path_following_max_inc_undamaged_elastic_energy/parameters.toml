@@ -32,9 +32,8 @@ width = 3.75e-06
 
 [loading]
 dl = 0.01
-constraint = "energy_release"
-dtau = 0.01
-beta = 1e-4
+constraint = "max_inc_undamaged_elastic_energy"
+dtau = 2e5
 
 [loading.nodal_displacement]
 lock_point.x = [0, 0, 0]

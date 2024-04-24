@@ -171,6 +171,7 @@ class DisplacementSubProblem:
             # Get the position
             x_imp = nd["x"]
             u_imp = nd["u"]
+
             # Generate the location function
             def lock_point(x):
                 return (
@@ -178,6 +179,7 @@ class DisplacementSubProblem:
                     & np.isclose(x[1], x_imp[1])
                     & np.isclose(x[2], x_imp[2])
                 )
+
             # Iterate through the components
             for comp, val in enumerate(u_imp):
                 # Check if the value is nan
@@ -583,25 +585,27 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 for i, p in enumerate(self.selection):
                     p["cell"] = cells[i]
 
-            case "energy_release":
-                self.beta = pars["loading"]["beta"]
-
-            case "undamaged_elastic_energy":
-                # Define the undamaged elastic energy form
-                sig0 = self.model.sig({"u": self.u0})
+            case "max_inc_undamaged_elastic_energy":
+                # Generate a function space for energy scalars
+                V_e = fem.functionspace(domain.mesh, ("DG", 0))
+                # Compute the strains
                 eps0 = self.model.eps({"u": self.u0})
-                self.e0_form = fem.form(1 / 2 * ufl.inner(sig0, eps0) * ufl.dx)
-                # Define the forms for the undamage elastic energy terms
-                eps1 = self.model.eps({"u": self.u1})
                 eps2 = self.model.eps({"u": self.u2})
                 # Compute the stresses
-                sig1 = self.model.sig({"u": self.u1})
+                sig0 = self.model.sig({"u": self.u0})
                 sig2 = self.model.sig({"u": self.u2})
-                # Compute the energies
-                self.e11_form = fem.form(1 / 2 * ufl.inner(sig1, eps1) * ufl.dx)
-                self.e22_form = fem.form(1 / 2 * ufl.inner(sig2, eps2) * ufl.dx)
-                self.e12_form = fem.form(1 / 2 * ufl.inner(sig1, eps2) * ufl.dx)
-                self.e21_form = fem.form(1 / 2 * ufl.inner(sig2, eps1) * ufl.dx)
+                # Get the coefficients expressions
+                self.a0_expr = fem.Expression(
+                    -ufl.sqrt(1 / 2 * ufl.inner(sig0, eps0)),
+                    V_e.element.interpolation_points(),
+                )
+                self.a1_expr = fem.Expression(
+                    ufl.sqrt(1 / 2 * ufl.inner(sig2, eps2)),
+                    V_e.element.interpolation_points(),
+                )
+                # Define the functions
+                self.a0 = fem.Function(V_e, name="a0")
+                self.a1 = fem.Function(V_e, name="a1")
 
         # Initialization of the step size adapation
         self.step_size_adapation = "k_opt" in pars["loading"]
@@ -665,8 +669,6 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         # Store the displacement at the beginning of load step
         self.u0.x.array[:] = self.u.x.array
         self.u0.x.scatter_forward()
-        # Store the nodal forces at the beginning of the load step
-        self.f0 = self.l * self.problem_u.b.array
         # Store the load factor at the beginning of the load step
         self.l0 = self.l
         # Check the constraint
@@ -674,9 +676,9 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
             case "max_strain_inc":
                 # Update the previous normed strain field
                 self.eps0_normed.interpolate(self.eps0_normed_expr)
-            case "undamaged_elastic_energy":
-                # Compute the undamaged elastic energy from previous load steps
-                self.e0 = fem.assemble_scalar(self.e0_form)
+            case "max_inc_undamaged_elastic_energy":
+                # Compute the coefficient a0 (does not change between load steps)
+                self.a0.interpolate(self.a0_expr)
 
     def select_control_equation(self):
         """Select the control equation.
@@ -704,11 +706,11 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 control_eq = "max_strain_inc" if self.t > 1 else "load_factor_inc"
             case "nodal_disp_inc":
                 control_eq = "nodal_disp_inc" if self.t > 1 else "load_factor_inc"
-            case "energy_release":
-                control_eq = "energy_release" if self.t > 1 else "load_factor_inc"
-            case "undamaged_elastic_energy":
+            case "max_inc_undamaged_elastic_energy":
                 control_eq = (
-                    "undamaged_elastic_energy" if self.t > 1 else "load_factor_inc"
+                    "max_inc_undamaged_elastic_energy"
+                    if self.t > 1
+                    else "load_factor_inc"
                 )
         return control_eq
 
@@ -797,44 +799,22 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # Compute the load factor
                 self.l = (-b + np.sqrt(d)) / (2 * a)
 
-            case "energy_release":
-                # Get the RHS
-                f0 = self.f0
-                f = self.problem_u.b.array[:]
-                # Compute the displacement increment
-                u0 = self.u0.x.array[:]
-                u2 = self.u2.x.array[:]
-                # Compute scalar products
-                f0_u0 = np.dot(f0, u0)
-                f_u0 = np.dot(f, u0)
-                f0_u2 = np.dot(f0, u2)
-                f_u2 = np.dot(f, u2)
-                # Compute the polynomial coefficients
-                a = self.beta * f_u2
-                b = f0_u2 - f_u0
-                c = -self.beta * f0_u0 - 2 * self.dtau
-                d = b**2 - 4 * a * c
-                self.l = (-b + np.sqrt(d)) / (2 * a)
-                # dU = 1 / 2 * (self.l**2 * f_u2 - f0_u0)
-                # dD = 1 / 2 * self.l * (f0_u2 - f_u0)
-                # print(
-                #     f"New: {dU=:.3g}; {dD=:.3g}; {dD + beta*dU=:.3g}; {dtau=:.3g}; {d=:.3g}"
-                # )
-
-            case "undamaged_elastic_energy":
-                if self.t > 1:
-                    # Compute the terms of the undamaged elastic energy
-                    e11 = fem.assemble_scalar(self.e11_form)
-                    e22 = fem.assemble_scalar(self.e22_form)
-                    e12 = fem.assemble_scalar(self.e12_form)
-                    e21 = fem.assemble_scalar(self.e21_form)
-                    # Compute the coefficients of the polynomial constraint
-                    a = e22
-                    b = e12 + e21
-                    c = e11 - (np.sqrt(self.e0) + self.dtau) ** 2
-                    d = b**2 - 4 * a * c
-                    # Compute the ideal load factor
-                    self.l = (-b + np.sqrt(d)) / (2 * a)
+            case "max_inc_undamaged_elastic_energy":
+                # Update the coefficients
+                self.a1.interpolate(self.a1_expr)
+                lambdas = (self.dtau - self.a0.x.array) / self.a1.x.array
+                # Choose the load factor using nested interval
+                a1_inf_0 = self.a1.x.array <= 0
+                a1_sup_0 = self.a1.x.array > 0
+                l_max = np.min(lambdas[a1_sup_0]) if any(a1_sup_0) else float("inf")
+                l_min = np.max(lambdas[a1_inf_0]) if any(a1_inf_0) else -float("inf")
+                # Check if the interval is valid
+                if l_max < l_min:
+                    raise RuntimeError(
+                        f"The maximal increment of load factor is inferior the the minimal (min: {l_min:.3g}, max: {l_max:.3g}.)"
+                    )
+                # Choose the load factor as the upper bound
+                self.l = l_max
 
         # Update the displacement
         self.u.x.array[:] = self.u1.x.array + self.l * self.u2.x.array
