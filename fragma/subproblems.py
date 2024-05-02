@@ -537,13 +537,10 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
             case "max_strain_inc":
                 # Generate a function space for strain-like scalars
                 eps_ufl = model.eps(state)
-                eps_elem = ufl.TensorElement(
-                    "DG", domain.mesh.ufl_cell(), 0, shape=eps_ufl.ufl_shape
-                )
-                V_eps = fem.FunctionSpace(domain.mesh, eps_elem)
+                shape = eps_ufl.ufl_shape
+                V_eps = fem.functionspace(domain.mesh, ("DG", 0, shape))
                 # Generate a function space for strain-like scalars
-                eps_scal_elem = ufl.FiniteElement("DG", domain.mesh.ufl_cell(), 0)
-                V_eps_scal = fem.FunctionSpace(domain.mesh, eps_scal_elem)
+                V_eps_scal = fem.functionspace(domain.mesh, ("DG", 0))
                 # Define the normed strain expression from previous load steps
                 eps0 = self.model.eps({"u": self.u0})
                 eps0_norm = ufl.sqrt(ufl.inner(eps0, eps0))
