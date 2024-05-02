@@ -187,8 +187,8 @@ class DisplacementSubProblem:
                     continue
                 # Add the new bc
                 dofs = fem.locate_dofs_geometrical((V_u.sub(comp), V_u), lock_point)[0]
-                print(dofs)
                 u_val = fem.Constant(domain.mesh, default_scalar_type(val))
+                print(dofs)
                 new_bc = fem.dirichletbc(u_val, dofs, V_u.sub(comp))
                 bcs.append(new_bc)
         return bcs

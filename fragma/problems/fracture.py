@@ -10,18 +10,15 @@ Classes:
 
 import time
 
-from petsc4py import PETSc
 from mpi4py import MPI
 import numpy as np
 
 from dolfinx import fem
-from dolfinx.fem.petsc import LinearProblem
 import ufl
 
 from models import FractureModel
 from problems.base_problem import BaseProblem
 from subproblems import create_displacement_subproblem, CrackPhaseSubProblem
-from utils.build_nullspace import build_elasticity_nullspace
 
 
 class FractureProblem(BaseProblem):
@@ -55,8 +52,8 @@ class FractureProblem(BaseProblem):
         ### Variational formulation
         print("\n████ DEFINITION OF THE STATE VARIABLES")
         # Define the displacement field
-        element_u = ufl.VectorElement("Lagrange", self.domain.mesh.ufl_cell(), degree=1)
-        self.V_u = fem.FunctionSpace(self.domain.mesh, element_u)
+        shape = (self.domain.mesh.geometry.dim,)
+        self.V_u = fem.functionspace(self.domain.mesh, ("Lagrange", 1, shape))
         u = fem.Function(self.V_u, name="Displacement")
         # Define the fracture phase field
         element_alpha = ufl.FiniteElement(

@@ -146,7 +146,7 @@ class PostProcessor:
         if displacement_probes_pos is not None:
             print("Generate the displacement probes")
             self.probes["displacement"] = Probes(
-                state["u"], displacement_probes_pos, mesh
+                state["u"], np.array(displacement_probes_pos), mesh
             )
 
     def __initialize_reaction_forces(self, domain, model, state, postprocess_pars):
@@ -440,7 +440,7 @@ class PostProcessor:
             return np.sqrt((x[0] - crack_tip[0]) ** 2 + (x[1] - crack_tip[1]) ** 2)
 
         # Define the variational problem to define theta
-        V_theta = fem.FunctionSpace(domain.mesh, ("Lagrange", 1))
+        V_theta = fem.functionspace(domain.mesh, ("Lagrange", 1))
         theta, theta_ = ufl.TrialFunction(V_theta), ufl.TestFunction(V_theta)
         a = ufl.dot(ufl.grad(theta), ufl.grad(theta_)) * ufl.dx
         L = (
