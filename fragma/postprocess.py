@@ -86,8 +86,8 @@ class PostProcessor:
         # Compute the strain from ufl
         eps_ufl = model.eps(state)
         # Generate FEM space for strain
-        eps_elem = ufl.TensorElement("DG", mesh.ufl_cell(), 0, shape=eps_ufl.ufl_shape)
-        V_eps = fem.FunctionSpace(mesh, eps_elem)
+        shape = eps_ufl.ufl_shape
+        V_eps = fem.functionspace(mesh, ("DG", 0, shape))
         # Convert the strain into an expression
         self.exprs["eps"] = fem.Expression(
             eps_ufl, V_eps.element.interpolation_points()
@@ -112,8 +112,8 @@ class PostProcessor:
         # Compute the stress from ufl
         sig_ufl = model.sig_eff(state)
         # Generate FEM space for stress
-        sig_elem = ufl.TensorElement("DG", mesh.ufl_cell(), 0, shape=sig_ufl.ufl_shape)
-        V_sig = fem.FunctionSpace(mesh, sig_elem)
+        shape = sig_ufl.ufl_shape
+        V_sig = fem.functionspace(mesh, ("DG", 0, shape))
         # Convert the stress into an expression
         self.exprs["sig"] = fem.Expression(
             sig_ufl, V_sig.element.interpolation_points()

@@ -91,8 +91,7 @@ class BaseModel:
             # Parse the expression using sympy
             par_lambda = sp.utilities.lambdify(x, par, "numpy")
             # Define the function space
-            par_elem = ufl.FiniteElement("DG", domain.mesh.ufl_cell(), 0)
-            V_par = fem.FunctionSpace(domain.mesh, par_elem)
+            V_par = fem.functionspace(domain.mesh, ("DG", 0))
             # Create the fem function
             par_func = fem.Function(V_par)
             par_func.interpolate(par_lambda)
