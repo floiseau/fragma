@@ -10,7 +10,6 @@ Classes:
 """
 
 from dolfinx import fem
-import ufl
 
 from problems.base_problem import BaseProblem
 from models import ElasticModel
@@ -39,9 +38,9 @@ class ElasticityProblem(BaseProblem):
         ### Variational formulation
         print("\n████ DEFINITION OF THE STATE VARIABLES")
         # Define the elements
-        element_u = ufl.VectorElement("Lagrange", self.domain.mesh.ufl_cell(), 1)
         # Define finite element spaces
-        self.V_u = fem.FunctionSpace(self.domain.mesh, element_u)
+        shape = (self.domain.mesh.geometry.dim,)
+        self.V_u = fem.functionspace(self.domain.mesh, ("Lagrange", 1, shape))
         # Define the state variables
         u = fem.Function(self.V_u, name="Displacement")
         # Define the state vector
