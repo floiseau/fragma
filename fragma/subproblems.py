@@ -582,6 +582,18 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 for i, p in enumerate(self.selection):
                     p["cell"] = cells[i]
 
+            case "local_arc_length":
+                # Compute the
+                alpha = state["alpha"]
+                # Compute the integrand
+                dx = ufl.dx(domain=domain.mesh)
+                # Get the crack phase norm
+                self.alpha_norm_form = fem.form(alpha * dx)
+                # Get the local displacement norm
+                self.a_form = fem.form(ufl.dot(self.u2, self.u2) * alpha * dx)
+                self.b_form = fem.form(-2 * ufl.dot(self.u2, self.u0) * alpha * dx)
+                self.c_form = fem.form(ufl.dot(self.u0, self.u0) * alpha * dx)
+
             case "max_inc_undamaged_elastic_energy":
                 # Generate a function space for energy scalars
                 V_e = fem.functionspace(domain.mesh, ("DG", 0))
@@ -703,6 +715,8 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 control_eq = "max_strain_inc" if self.t > 1 else "load_factor_inc"
             case "nodal_disp_inc":
                 control_eq = "nodal_disp_inc" if self.t > 1 else "load_factor_inc"
+            case "local_arc_length":
+                control_eq = "local_arc_length" if self.t > 1 else "load_factor_inc"
             case "max_inc_undamaged_elastic_energy":
                 control_eq = (
                     "max_inc_undamaged_elastic_energy"
@@ -795,6 +809,20 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 d = b**2 - 4 * a * c
                 # Compute the load factor
                 self.l = (-b + np.sqrt(d)) / (2 * a)
+
+            case "local_arc_length":
+                # Compute the crack phase field norm
+                a_norm = fem.assemble_scalar(self.alpha_norm_form)
+                if a_norm < 1e-12:
+                    self.l = self.l0 + self.dl # NOTE Could also use classic arc-length
+                else:
+                    # Compute the coefficients
+                    a = fem.assemble_scalar(self.a_form)
+                    b = fem.assemble_scalar(self.b_form)
+                    c = fem.assemble_scalar(self.c_form) - self.dtau**2 * a_norm
+                    d = b**2 - 4*a*c
+                    # Compute lambda
+                    self.l = (-b + np.sqrt(d)) / (2*a)
 
             case "max_inc_undamaged_elastic_energy":
                 # Update the coefficients
