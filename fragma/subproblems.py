@@ -188,7 +188,6 @@ class DisplacementSubProblem:
                 # Add the new bc
                 dofs = fem.locate_dofs_geometrical((V_u.sub(comp), V_u), lock_point)[0]
                 u_val = fem.Constant(domain.mesh, default_scalar_type(val))
-                print(dofs)
                 new_bc = fem.dirichletbc(u_val, dofs, V_u.sub(comp))
                 bcs.append(new_bc)
         return bcs
@@ -571,7 +570,7 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 self.s = np.einsum("i,j->ij", c, c)
                 # Get the cells for displacement evaluation
                 mesh = domain.mesh
-                xs = [p["pos"] for p in self.selection]
+                xs = np.array([p["pos"] for p in self.selection])
                 tree = dolfinx.geometry.bb_tree(mesh, mesh.topology.dim)
                 cell_candidates = dolfinx.geometry.compute_collisions_points(tree, xs)
                 colliding_cells = dolfinx.geometry.compute_colliding_cells(
