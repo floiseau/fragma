@@ -819,7 +819,7 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                     a = fem.assemble_scalar(self.a_form)
                     b = fem.assemble_scalar(self.b_form)
                     c = fem.assemble_scalar(self.c_form) - self.dtau**2 * a_norm
-                    d = b**2 - 4*a*c
+                    d = max(b**2 - 4*a*c, 0)
                     # Compute lambda
                     self.l = (-b + np.sqrt(d)) / (2*a)
 
