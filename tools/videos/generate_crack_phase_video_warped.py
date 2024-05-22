@@ -4,14 +4,14 @@ import pyvista as pv
 # Create a video directory
 Path("videos").mkdir(exist_ok=True)
 # Read data
-displ_reader = pv.get_reader('results/Displacement.pvd')
-crack_reader = pv.get_reader('results/CrackPhase.pvd')
+displ_reader = pv.get_reader("results/Displacement.pvd")
+crack_reader = pv.get_reader("results/CrackPhase.pvd")
 # Get time steps
 ts = displ_reader.time_values
 # Create a plotter
 p = pv.Plotter(off_screen=True)
 # Open a gif
-p.open_gif("videos/CrackPhase_warped.gif", fps=len(ts)/(5*5))
+p.open_gif("videos/CrackPhase_warped.gif", fps=len(ts) / (5 * 5))
 
 for t in ts:
     if not t % 5 == 0:

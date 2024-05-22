@@ -4,13 +4,13 @@ import pyvista as pv
 # Create a video directory
 Path("videos").mkdir(exist_ok=True)
 # Read data
-reader = pv.get_reader('results/CrackPhase.pvd')
+reader = pv.get_reader("results/CrackPhase.pvd")
 # Get time steps
 ts = reader.time_values
 # Create a plotter
 p = pv.Plotter(off_screen=True)
 # Open a gif
-p.open_gif("videos/CrackPhase.gif", fps=len(ts)/5)
+p.open_gif("videos/CrackPhase.gif", fps=len(ts) / 5)
 
 for t in ts:
     # Reset the plotter
