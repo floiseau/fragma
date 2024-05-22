@@ -582,16 +582,25 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                     p["cell"] = cells[i]
 
             case "local_arc_length":
-                # Compute the
-                alpha = state["alpha"]
-                # Compute the integrand
-                dx = ufl.dx(domain=domain.mesh)
-                # Get the crack phase norm
-                self.alpha_norm_form = fem.form(alpha * dx)
-                # Get the local displacement norm
-                self.a_form = fem.form(ufl.dot(self.u2, self.u2) * alpha * dx)
-                self.b_form = fem.form(-2 * ufl.dot(self.u2, self.u0) * alpha * dx)
-                self.c_form = fem.form(ufl.dot(self.u0, self.u0) * alpha * dx)
+                # Get the functions
+                u = self.u2
+                u0 = self.u0
+                # Define a function space for displacements dot product
+                V_u_scal = fem.functionspace(domain.mesh, ("Lagrange", 1))
+                # Define the norm of the initial displacement field
+                u0_norm = ufl.sqrt(ufl.dot(u0, u0))
+                # Get the coefficients expressions
+                self.u0_u0_expr = fem.Expression(
+                    ufl.dot(u0, u0) / u0_norm,
+                    V_u_scal.element.interpolation_points(),
+                )
+                self.u_u0_expr = fem.Expression(
+                    ufl.dot(u, u0) / u0_norm,
+                    V_u_scal.element.interpolation_points(),
+                )
+                # Define the functions
+                self.u0_u0 = fem.Function(V_u_scal, name="a0")
+                self.u_u0 = fem.Function(V_u_scal, name="a1")
 
             case "max_inc_undamaged_elastic_energy":
                 # Generate a function space for energy scalars
@@ -669,7 +678,7 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         self.k_nm1 = self.k
         # Reset the iteration counter
         self.k = 1
-        # Select the control equation for the current phase
+        # Select the control equation for the current load step
         self.control_eq = self.select_control_equation()
         # Adapt the step size if the option is enabled
         if self.step_size_adapation:
@@ -810,18 +819,23 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 self.l = (-b + np.sqrt(d)) / (2 * a)
 
             case "local_arc_length":
-                # Compute the crack phase field norm
-                a_norm = fem.assemble_scalar(self.alpha_norm_form)
-                if a_norm < 1e-12:
-                    self.l = self.l0 + self.dl # NOTE Could also use classic arc-length
-                else:
-                    # Compute the coefficients
-                    a = fem.assemble_scalar(self.a_form)
-                    b = fem.assemble_scalar(self.b_form)
-                    c = fem.assemble_scalar(self.c_form) - self.dtau**2 * a_norm
-                    d = max(b**2 - 4*a*c, 0)
-                    # Compute lambda
-                    self.l = (-b + np.sqrt(d)) / (2*a)
+                # Update the coefficients
+                self.u0_u0.interpolate(self.u0_u0_expr)
+                self.u_u0.interpolate(self.u_u0_expr)
+                # Compute load factor for each element
+                lambdas = (self.dtau + self.u0_u0.x.array) / self.u_u0.x.array
+                # Choose the load factor using nested interval
+                a1_inf_0 = self.u_u0.x.array <= 0
+                a1_sup_0 = self.u_u0.x.array > 0
+                l_max = np.min(lambdas[a1_sup_0]) if any(a1_sup_0) else float("inf")
+                l_min = np.max(lambdas[a1_inf_0]) if any(a1_inf_0) else -float("inf")
+                # Check if the interval is valid
+                if l_max < l_min:
+                    raise RuntimeError(
+                        f"The maximal increment of load factor is inferior the the minimal (min: {l_min:.3g}, max: {l_max:.3g}.)"
+                    )
+                # Choose the load factor as the upper bound
+                self.l = l_max
 
             case "max_inc_undamaged_elastic_energy":
                 # Update the coefficients
