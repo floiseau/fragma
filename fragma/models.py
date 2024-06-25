@@ -2,7 +2,7 @@ import numpy as np
 import sympy as sp
 
 
-from dolfinx import fem, default_scalar_type
+from dolfinx import fem
 import ufl
 
 
@@ -277,7 +277,7 @@ class FractureModel(ElasticModel):
             Gc_min = self.parse_parameter(pars["mechanical"]["Gc_min"], domain)
             Gc_max = self.parse_parameter(pars["mechanical"]["Gc_max"], domain)
             # Convert to other model parameters
-            self.Gc = np.sqrt(1 / 2 * (Gc_min**2 + Gc_max**2))
+            self.Gc = ufl.sqrt(1 / 2 * (Gc_min**2 + Gc_max**2))
             self.aG = 1 / 2 * (Gc_max**2 - Gc_min**2) / self.Gc**2
             # Ge the anisotropy angle
             self.theta_0 = (
@@ -461,20 +461,20 @@ class FractureModel(ElasticModel):
         ell = self.ell
         cw = self.cw()
         # Compute the anisotropy matrix
-        A_np = np.eye(domain.mesh.geometry.dim)
+        A = ufl.as_tensor(np.eye(domain.mesh.geometry.dim))
         # Add the higher order terms if the model is anisotropic
         if self.is_anisotropic:
             # Get the parameters
             aG, theta_0 = self.aG, self.theta_0
             #  Compute the 2nd order term of the anisotropy tensor
-            A_np += aG * np.array(
-                [
-                    [np.cos(2 * theta_0), np.sin(2 * theta_0)],
-                    [np.sin(2 * theta_0), -np.cos(2 * theta_0)],
-                ]
+            A += aG * ufl.as_tensor(
+                np.array(
+                    [
+                        [np.cos(2 * theta_0), np.sin(2 * theta_0)],
+                        [np.sin(2 * theta_0), -np.cos(2 * theta_0)],
+                    ]
+                )
             )
-        # Create an FEM constant for the anisotropy matrix
-        A = fem.Constant(domain.mesh, A_np)
         # Define the energy terms
         dissipated_energy = (
             Gc
