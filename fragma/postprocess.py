@@ -272,6 +272,8 @@ class PostProcessor:
         R_int = postprocess_pars["SIFs"]["R_int"]
         R_ext = postprocess_pars["SIFs"]["R_ext"]
         phi0 = np.deg2rad(postprocess_pars["SIFs"]["crack_growth_angle"])
+        # Get the displacement field
+        u = state["u"]
         # Get the theta field
         theta_field = self.compute_theta_field(domain, xc, R_int, R_ext)
         theta = ufl.as_vector([ufl.cos(phi0), ufl.sin(phi0)]) * theta_field
@@ -282,8 +284,6 @@ class PostProcessor:
         u_II_aux = self.compute_auxiliary_displacement_field(
             domain, model, xc, phi0, K_I_aux=0, K_II_aux=1
         )
-        # Get the displacement field
-        u = state["u"]
         # Compute the I-integrals
         I_I = self.compute_I_integral(domain, model, u, u_I_aux, theta)
         I_II = self.compute_I_integral(domain, model, u, u_II_aux, theta)
@@ -303,12 +303,46 @@ class PostProcessor:
     def compute_auxiliary_displacement_field(
         self, domain, model, xc, phi0, K_I_aux, K_II_aux
     ):
-        # Get the polar coordinates
+        """Compute the auxialary displacement fields used in the SIFs calculations.
+
+        The expression for the auxiliary field comes from [1]__.
+        Note that the expression from [2]__ seems to be wrong.
+
+        Notes
+        -----
+            For the rotation of the displacement vector field: https://math.stackexchange.com/questions/912070/rotating-vector-functions.
+
+        Parameters
+        ----------
+        domain : Domain
+            The domain object containing the mesh and information on the boundaries.
+        model: BaseModel
+            The material model.
+        xc : numpy.array
+            Position of the crack tip.
+        phi0 : float
+            Orientation of the crack.
+        K_I_aux: float
+            SIF in mode I for the auxiliary displacement field.
+        K_II_aux: float
+            SIF in mode II for the auxiliary displacement field.
+
+        .. [1] Smith, D. J., Ayatollahi, M. R., & Pavier, M. J. (2001). The role of T-stress in brittle fracture for linear elastic materials under mixed-mode loading. Fatigue & Fracture of Engineering Materials & Structures, 24(2), 137–150. https://doi.org/10.1046/j.1460-2695.2001.00377.x
+        .. [2] Yu, H., & Kuna, M. (2021). Interaction integral method for computation of crack parameters K-T -- A review. Engineering Fracture Mechanics, 249, 107722. https://doi.org/10.1016/j.engfracmech.2021.107722
+        """
+        # Get the cartesian coordinates
         x = ufl.SpatialCoordinate(domain.mesh)
         x_tip = ufl.as_vector(xc[:2])
-        r_vec = x - x_tip
+        # Translate the domain to set the crack tip as origin
+        r_vec_init = x - x_tip
+        # Rotate the spatial coordinates to match the crack direction
+        R = ufl.as_tensor(
+            [[ufl.cos(phi0), -ufl.sin(phi0)], [ufl.sin(phi0), ufl.cos(phi0)]]
+        )
+        r_vec = ufl.transpose(R) * r_vec_init
+        # Get the polar coordinates
         r = ufl.sqrt(ufl.dot(r_vec, r_vec))
-        theta = ufl.atan2(r_vec[1], r_vec[0]) - phi0
+        theta = ufl.atan2(r_vec[1], r_vec[0])
         # Get the elastic parameters
         mu = model.mu
         # Get kappa
@@ -318,18 +352,25 @@ class PostProcessor:
                 ka = (3 - nu) / (1 + nu)
             case "plane_strain":
                 ka = 3 - 4 * nu
-        # Compute the function f
+        # Compute the functions f
         f_I, f_II = [0, 0], [0, 0]
-        f_I[0] = (ka - ufl.cos(theta)) / (2 * mu) * ufl.cos(theta / 2)
-        f_I[1] = (ka - ufl.cos(theta)) / (2 * mu) * ufl.sin(theta / 2)
-        f_II[0] = (2 + ka + ufl.cos(theta)) / (2 * mu) * ufl.sin(theta / 2)
-        f_II[1] = (2 - ka - ufl.cos(theta)) / (2 * mu) * ufl.cos(theta / 2)
+        f_I[0] = (ka - 1 + 2 * ufl.sin(theta / 2) ** 2) * ufl.cos(theta / 2)
+        f_I[1] = (ka + 1 - 2 * ufl.cos(theta / 2) ** 2) * ufl.sin(theta / 2)
+        f_II[0] = (ka + 1 + 2 * ufl.cos(theta / 2) ** 2) * ufl.sin(theta / 2)
+        f_II[1] = -(ka - 1 - 2 * ufl.sin(theta / 2) ** 2) * ufl.cos(theta / 2)
         # Compute the displacement field
-        ui = [
-            ufl.sqrt(r / (2 * np.pi)) * (K_I_aux * f_I[i] + K_II_aux * f_II[i])
-            for i in range(2)
-        ]
-        return ufl.as_vector(ui)
+        ui = (
+            ufl.sqrt(r / (2 * np.pi))
+            / (2 * mu)
+            * ufl.as_vector(
+                [
+                    K_I_aux * f_I[0] + K_II_aux * f_II[0],
+                    K_I_aux * f_I[1] + K_II_aux * f_II[1],
+                ]
+            )
+        )
+        # Rotate the displacement vectors
+        return R * ui
 
     def compute_I_integral(self, domain, model, u, u_aux, theta):
         # Compute the gradients
@@ -391,16 +432,14 @@ class PostProcessor:
         crack_tip = np.array(postprocess_pars["energy_release_rate"]["crack_tip"])
         R_int = postprocess_pars["energy_release_rate"]["R_int"]
         R_ext = postprocess_pars["energy_release_rate"]["R_ext"]
-        alpha = np.deg2rad(
-            postprocess_pars["energy_release_rate"]["crack_growth_angle"]
-        )
+        phi0 = np.deg2rad(postprocess_pars["energy_release_rate"]["crack_growth_angle"])
         # Get the theta field
         theta_field = self.compute_theta_field(domain, crack_tip, R_int, R_ext)
         # Compute the energy release rate form
         u = state["u"]
         eps = model.eps(state)
         sig = model.sig_eff(state)
-        theta_vector = ufl.as_vector([ufl.cos(alpha), ufl.sin(alpha)]) * theta_field
+        theta_vector = ufl.as_vector([ufl.cos(phi0), ufl.sin(phi0)]) * theta_field
         dx = ufl.dx(domain=domain.mesh)
         G_expr = (
             ufl.inner(sig, ufl.grad(u) * ufl.grad(theta_vector)) * dx
@@ -491,13 +530,13 @@ class PostProcessor:
             error_message = "The T-stress can not be computed in 3D yet."
             raise NotImplementedError(error_message)
         # Read the parameters
-        crack_tip = np.array(postprocess_pars["T_stress"]["crack_tip"])
+        xc = np.array(postprocess_pars["T_stress"]["crack_tip"])
         R_int = postprocess_pars["T_stress"]["R_int"]
         R_ext = postprocess_pars["T_stress"]["R_ext"]
-        alpha = np.deg2rad(postprocess_pars["T_stress"]["crack_growth_angle"])
+        phi0 = np.deg2rad(postprocess_pars["T_stress"]["crack_growth_angle"])
         # Get the theta field
-        theta_field = self.compute_theta_field(domain, crack_tip, R_int, R_ext)
-        theta_vector = ufl.as_vector([ufl.cos(alpha), ufl.sin(alpha)]) * theta_field
+        theta_field = self.compute_theta_field(domain, xc, R_int, R_ext)
+        theta_vector = ufl.as_vector([ufl.cos(phi0), ufl.sin(phi0)]) * theta_field
         # Get the displacement field
         u = state["u"]
         # Get the elastic parameters
@@ -513,12 +552,21 @@ class PostProcessor:
         # Other parameters
         F = 1
         d = 1
-        # Compute the auxiliary displacement field
+        # Get the cartesian coordinates
         x = ufl.SpatialCoordinate(domain.mesh)
-        x_tip = ufl.as_vector(crack_tip)
-        r_vec = x - x_tip
+ 	 # Get the crack tip
+        x_tip = ufl.as_vector(xc[:2])
+        # Translate the domain to set the crack tip as origin
+        r_vec_init = x - x_tip
+        # Rotate the spatial coordinates to match the crack direction
+        R = ufl.as_tensor(
+            [[ufl.cos(phi0), -ufl.sin(phi0)], [ufl.sin(phi0), ufl.cos(phi0)]]
+        )
+        r_vec = ufl.transpose(R) * r_vec_init
+        # Get the polar coordinates
         r = ufl.sqrt(ufl.dot(r_vec, r_vec))
-        phi = ufl.atan2(r_vec[1], r_vec[0]) - alpha
+        phi = ufl.atan2(r_vec[1], r_vec[0])
+        # Compute the auxiliary displacement field
         u_1_aux = (
             -F / np.pi * (ka + 1) / (8 * mu) * ufl.ln(r / d)
             - F / np.pi * 1 / (4 * mu) * ufl.sin(phi) ** 2
@@ -526,7 +574,9 @@ class PostProcessor:
         u_2_aux = -F / np.pi * (ka - 1) / (8 * mu) * phi + F / np.pi * 1 / (
             4 * mu
         ) * ufl.sin(phi) * ufl.cos(phi)
-        u_aux = ufl.as_vector([u_1_aux, u_2_aux])
+        u_aux_init = ufl.as_vector([u_1_aux, u_2_aux])
+ 	 # Rotate the auxiliary field
+        u_aux = R * u_aux_init
         # Compute displacement gradients
         grad_u = ufl.grad(u)
         grad_u_aux = ufl.grad(u_aux)
