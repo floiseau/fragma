@@ -50,7 +50,7 @@ def run_simulation(alpha_deg):
     # Run the simulation using Fragma
     fragma_command = [
         "python",
-        "/home/flavien.loiseau/ownCloud/codes/fragma/fragma/main.py",
+        "../../../fragma/main.py",
     ]
     with open("fragma.log", "w") as log_file:
         res = subprocess.run(
