@@ -624,6 +624,24 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 self.a0 = fem.Function(V_e, name="a0")
                 self.a1 = fem.Function(V_e, name="a1")
 
+            case "crack_driving_variable":
+                # Initialize the previous tau
+                self.tau0 = 0
+                # Get crack phase
+                alpha = self.alpha
+                # Compute the strain
+                eps2 = self.model.eps({"u": self.u2})
+                # Compute the stress
+                sig2 = self.model.sig({"u": self.u2})
+                # Define the form
+                # TODO Derivate the real a function from the model !
+                dx = ufl.Measure("dx", domain=domain.mesh)
+                self.tau2_form = fem.form(
+                    (1 - alpha) * alpha * ufl.inner(eps2, sig2) * dx
+                )
+                # Initialize tau2
+                self.tau2 = fem.assemble_scalar(self.tau2_form)
+
         # Initialization of the step size adapation
         self.step_size_adapation = "k_opt" in pars["loading"]
         if self.step_size_adapation:
@@ -651,6 +669,8 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         """
         # Store the displacement state variable
         self.u = state["u"]
+        # Store the crack phase variable
+        self.alpha = state["alpha"]
         # Create the displacement at previous load step
         self.u0 = self.u.copy()
         # Define displacement functions
@@ -696,6 +716,9 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
             case "max_inc_undamaged_elastic_energy":
                 # Compute the coefficient a0 (does not change between load steps)
                 self.a0.interpolate(self.a0_expr)
+            case "crack_driving_variable":
+                # Update the previous tau value
+                self.tau0 = self.l**2 * self.tau2
 
     def select_control_equation(self):
         """Select the control equation.
@@ -731,6 +754,11 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                     if self.t > 1
                     else "load_factor_inc"
                 )
+            case "crack_driving_variable":
+                control_eq = (
+                    "crack_driving_variable" if self.t > 1 else "load_factor_inc"
+                )
+
         return control_eq
 
     def adapt_step_size(self):
@@ -853,6 +881,12 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                     )
                 # Choose the load factor as the upper bound
                 self.l = l_max
+
+            case "crack_driving_variable":
+                # Compute tau2
+                self.tau2 = fem.assemble_scalar(self.tau2_form)
+                # Compute the load factor
+                self.l = np.sqrt((self.dtau + self.tau0) / self.tau2)
 
         # Update the displacement
         self.u.x.array[:] = self.u1.x.array + self.l * self.u2.x.array
