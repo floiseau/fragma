@@ -57,6 +57,9 @@ class PostProcessor:
         # Initialize stress export
         if "stress" in fields:
             self.__initialize_stress(domain.mesh, model, state)
+        # Initialize crack-driving variable field export
+        if "crack-driving_variable" in fields:
+            self.__initialize_crack_driving_variable(domain.mesh, model, state)
         # Initialize probes dict
         self.__initialize_probes(domain.mesh, state, postprocess_pars)
         # Initialize the reaction forces
@@ -121,6 +124,48 @@ class PostProcessor:
         # Set the stress function
         self.funcs["sig"] = fem.Function(V_sig, name="Stress")
         self.funcs["sig"].interpolate(self.exprs["sig"])
+
+    def __initialize_crack_driving_variable(self, mesh, model, state):
+        """
+        Initialize the crack-driving variables calculation.
+
+        Parameters
+        ----------
+        mesh : dolfinx.Mesh
+            The mesh representing the domain.
+        model : BaseModel
+            The material model used in the simulation.
+        state : dict
+            Dictionary containing state variables.
+        """
+        # Compute intermediate variables
+        eps = model.eps(state)
+        sig = model.sig(state)
+        alpha = state["alpha"]
+        # Compute the stress from ufl
+        cdv_w = alpha * (1 - alpha)
+        cdv_e = ufl.inner(sig, eps)
+        cvd_ufl = cdv_w * cdv_e
+        # Generate FEM space for crack-driving variable
+        # V_cvd = fem.functionspace(mesh, ("Lagrange", 1))
+        V_cvd = fem.functionspace(mesh, ("DG", 0))
+        # Convert the crack-driving variable into an expression
+        self.exprs["cdv_e"] = fem.Expression(
+            cdv_e, V_cvd.element.interpolation_points()
+        )
+        self.exprs["cdv_w"] = fem.Expression(
+            cdv_w, V_cvd.element.interpolation_points()
+        )
+        self.exprs["cdv"] = fem.Expression(
+            cvd_ufl, V_cvd.element.interpolation_points()
+        )
+        # Set the crack-driving variable function
+        self.funcs["cdv_e"] = fem.Function(V_cvd, name="Crack-driving Variable Energy")
+        self.funcs["cdv_e"].interpolate(self.exprs["cdv_e"])
+        self.funcs["cdv_w"] = fem.Function(V_cvd, name="Crack-driving Variable Weight")
+        self.funcs["cdv_w"].interpolate(self.exprs["cdv_w"])
+        self.funcs["cdv"] = fem.Function(V_cvd, name="Crack-driving Variable")
+        self.funcs["cdv"].interpolate(self.exprs["cdv"])
 
     def __initialize_probes(self, mesh, state, postprocess_pars):
         """
@@ -554,7 +599,7 @@ class PostProcessor:
         d = 1
         # Get the cartesian coordinates
         x = ufl.SpatialCoordinate(domain.mesh)
- 	 # Get the crack tip
+        # Get the crack tip
         x_tip = ufl.as_vector(xc[:2])
         # Translate the domain to set the crack tip as origin
         r_vec_init = x - x_tip
@@ -575,7 +620,7 @@ class PostProcessor:
             4 * mu
         ) * ufl.sin(phi) * ufl.cos(phi)
         u_aux_init = ufl.as_vector([u_1_aux, u_2_aux])
- 	 # Rotate the auxiliary field
+        # Rotate the auxiliary field
         u_aux = R * u_aux_init
         # Compute displacement gradients
         grad_u = ufl.grad(u)
