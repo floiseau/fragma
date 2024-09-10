@@ -659,7 +659,9 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # TODO Derivate the real a function from the model !
                 dx = ufl.Measure("dx", domain=domain.mesh)
                 self.tau2_form = fem.form(
-                    (
+                    1
+                    / 2
+                    * (
                         (1 - alpha) * alpha * ufl.inner(eps2, sig2)
                         + Gc / cw * alpha / ell
                     )
