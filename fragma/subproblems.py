@@ -642,6 +642,94 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # Initialize tau2
                 self.tau2 = fem.assemble_scalar(self.tau2_form)
 
+            case "dissipation_v1":
+                # Initialize the previous tau
+                self.tau0 = 0
+                # Get the parameters
+                Gc = self.model.Gc
+                cw = self.model.cw()
+                ell = self.model.ell
+                # Get crack phase
+                alpha = self.alpha
+                # Compute the strain
+                eps2 = self.model.eps({"u": self.u2})
+                # Compute the stress
+                sig2 = self.model.sig({"u": self.u2})
+                # Define the form
+                # TODO Derivate the real a function from the model !
+                dx = ufl.Measure("dx", domain=domain.mesh)
+                self.tau2_form = fem.form(
+                    (
+                        (1 - alpha) * alpha * ufl.inner(eps2, sig2)
+                        + Gc / cw * alpha / ell
+                    )
+                    * dx
+                )
+                # Initialize tau2
+                self.tau2 = fem.assemble_scalar(self.tau2_form)
+
+            case "dissipation_v2":
+                # Initialize the previous tau
+                self.tau0 = 0
+                # Get the parameters
+                Gc = self.model.Gc
+                cw = self.model.cw()
+                ell = self.model.ell
+                # Get crack phase
+                alpha = self.alpha
+                # Compute the strain
+                eps2 = self.model.eps({"u": self.u2})
+                # Compute the stress
+                sig2 = self.model.sig({"u": self.u2})
+                # Compute the grad of alpha
+                grad_a = ufl.grad(alpha)
+                # Define the form
+                # TODO Derivate the real a function from the model !
+                dx = ufl.Measure("dx", domain=domain.mesh)
+                self.tau2_form = fem.form(
+                    (
+                        (1 - alpha) * alpha * ufl.inner(eps2, sig2)
+                        - Gc / cw * ell * ufl.inner(grad_a, grad_a)
+                    )
+                    * dx
+                )
+                # Initialize tau2
+                self.tau2 = fem.assemble_scalar(self.tau2_form)
+
+            case "max_crack_driving_variable":
+                # Initialize the previous tau
+                self.tau0 = 0
+                # Get crack phase
+                alpha = self.alpha
+                # Compute the strain
+                eps2 = self.model.eps({"u": self.u2})
+                # Compute the stress
+                sig2 = self.model.sig({"u": self.u2})
+                # Define the expressions
+                weight_expr = (1 - alpha) * alpha
+                energy_expr = ufl.inner(eps2, sig2)
+                # Compute the functions
+                V_w = fem.functionspace(domain.mesh, ("Lagrange", 1))
+                self.weight_expr = fem.Expression(
+                    weight_expr, V_w.element.interpolation_points()
+                )
+                V_e = fem.functionspace(domain.mesh, ("DG", 0))
+                self.energy_expr = fem.Expression(
+                    energy_expr, V_e.element.interpolation_points()
+                )
+                self.weight = fem.Function(V_w, name="weight")
+                self.energy = fem.Function(V_e, name="energy")
+                # Initialize the weight and energy
+                self.weight.interpolate(self.weight_expr)
+                self.energy.interpolate(self.energy_expr)
+                # Define the forms
+                dx = ufl.Measure("dx", domain=domain.mesh)
+                self.tau2_form = fem.form(self.weight * self.energy * dx)
+                # Initialize tau2
+                self.tau2 = fem.assemble_scalar(self.tau2_form)
+                # Initialize previous energy
+                self.energy0 = self.energy.copy()
+
         # Initialization of the step size adapation
         self.step_size_adapation = "k_opt" in pars["loading"]
         if self.step_size_adapation:
@@ -716,9 +804,13 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
             case "max_inc_undamaged_elastic_energy":
                 # Compute the coefficient a0 (does not change between load steps)
                 self.a0.interpolate(self.a0_expr)
-            case "crack_driving_variable":
+            case "crack_driving_variable" | "dissipation_v1" | "dissipation_v2":
                 # Update the previous tau value
                 self.tau0 = self.l**2 * self.tau2
+            case "max_crack_driving_variable":
+                # Update the previous tau value
+                self.tau0 = self.l**2 * self.tau2
+                self.energy0.x.array[:] = self.energy.x.array[:]
 
     def select_control_equation(self):
         """Select the control equation.
@@ -730,36 +822,8 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         -------
         str
             The selected control equation.
-
-        Notes
-        -----
-        The control equation determines how the loading constraint is applied
-        during the simulation. The available control equations are:
-        - 'load_factor_inc': Increase the load factor incrementally.
-        - 'max_strain_inc': Increase the load factor to obtain a specific value of the maximum strain in the domain.
-        When choosing the 'max_strain_inc' constraint, the load factor increment is used for the two first loads steps: one for the unloaded step and another one for the initialization of the method.
         """
-        match self.constraint:
-            case "load_factor_inc":
-                control_eq = "load_factor_inc"
-            case "max_strain_inc":
-                control_eq = "max_strain_inc" if self.t > 1 else "load_factor_inc"
-            case "nodal_disp_inc":
-                control_eq = "nodal_disp_inc" if self.t > 1 else "load_factor_inc"
-            case "local_arc_length":
-                control_eq = "local_arc_length" if self.t > 1 else "load_factor_inc"
-            case "max_inc_undamaged_elastic_energy":
-                control_eq = (
-                    "max_inc_undamaged_elastic_energy"
-                    if self.t > 1
-                    else "load_factor_inc"
-                )
-            case "crack_driving_variable":
-                control_eq = (
-                    "crack_driving_variable" if self.t > 1 else "load_factor_inc"
-                )
-
-        return control_eq
+        return self.constraint if self.t > 1 else "load_factor_inc"
 
     def adapt_step_size(self):
         """Adapt the step size during the simulation.
@@ -882,7 +946,19 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # Choose the load factor as the upper bound
                 self.l = l_max
 
-            case "crack_driving_variable":
+            case "crack_driving_variable" | "dissipation_v1" | "dissipation_v2":
+                # Compute tau2
+                self.tau2 = fem.assemble_scalar(self.tau2_form)
+                # Compute the load factor
+                self.l = np.sqrt((self.dtau + self.tau0) / self.tau2)
+
+            case "max_crack_driving_variable":
+                # Update the functions
+                self.weight.interpolate(self.weight_expr)
+                self.energy.interpolate(self.energy_expr)
+                self.energy.x.array[:] = np.maximum(
+                    self.energy.x.array[:], self.energy0.x.array[:]
+                )
                 # Compute tau2
                 self.tau2 = fem.assemble_scalar(self.tau2_form)
                 # Compute the load factor
