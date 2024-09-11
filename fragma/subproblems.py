@@ -602,6 +602,27 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 self.u0_u0 = fem.Function(V_u_scal, name="a0")
                 self.u_u0 = fem.Function(V_u_scal, name="a1")
 
+            case "pz_local_arc_length":
+                # Initialize previous crack phase
+                self.alpha0 = self.alpha.copy()
+                # Get state variables
+                u0 = self.u0
+                u2 = self.u2
+                # Define a function space for displacements dot product
+                V_u_scal = fem.functionspace(domain.mesh, ("Lagrange", 1))
+                # Get the coefficients expressions
+                self.u0_u0_expr = fem.Expression(
+                    ufl.dot(u0, u0),
+                    V_u_scal.element.interpolation_points(),
+                )
+                self.u2_u0_expr = fem.Expression(
+                    ufl.dot(u2, u0),
+                    V_u_scal.element.interpolation_points(),
+                )
+                # Define the functions
+                self.u0_u0 = fem.Function(V_u_scal, name="a0")
+                self.u2_u0 = fem.Function(V_u_scal, name="a1")
+
             case "max_inc_undamaged_elastic_energy":
                 # Generate a function space for energy scalars
                 V_e = fem.functionspace(domain.mesh, ("DG", 0))
@@ -803,11 +824,28 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
             case "max_strain_inc":
                 # Update the previous normed strain field
                 self.eps0_normed.interpolate(self.eps0_normed_expr)
+            case "pz_local_arc_length":
+                # Compute the control region
+                a = self.alpha.x.array[:]
+                a0 = self.alpha0.x.array[:]
+                da = a - a0
+                cr = np.logical_and(da > 0, a < 0.6)
+                cr = np.logical_and(cr, a > 0.4)
+                # Select the node with the highest phase increment
+                self.control_region = cr if np.any(cr) else None
+                if np.any(self.control_region):
+                    print("Control equation: Control node found :)")
+                    print(self.control_region)
+                else:
+                    print("Control equation: No control node found :(")
+                # Update alpha0
+                self.alpha0.x.array[:] = self.alpha.x.array
             case "max_inc_undamaged_elastic_energy":
                 # Compute the coefficient a0 (does not change between load steps)
                 self.a0.interpolate(self.a0_expr)
             case "crack_driving_variable" | "dissipation_v1" | "dissipation_v2":
                 # Update the previous tau value
+                self.tau2 = fem.assemble_scalar(self.tau2_form)
                 self.tau0 = self.l**2 * self.tau2
             case "max_crack_driving_variable":
                 # Update the previous tau value
@@ -930,6 +968,35 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                     )
                 # Choose the load factor as the upper bound
                 self.l = l_max
+
+            case "pz_local_arc_length":
+                # Update the coefficients
+                self.u0_u0.interpolate(self.u0_u0_expr)
+                self.u2_u0.interpolate(self.u2_u0_expr)
+                # Check if the control region is empty
+                if np.any(self.control_region):
+                    # Compute the dot products
+                    u2_u0 = self.u2_u0.x.array[self.control_region]
+                    u0_u0 = self.u0_u0.x.array[self.control_region]
+                    # Compute load factor for each element
+                    lambdas = (self.dtau**2 + u0_u0) / u2_u0
+                    # Choose the load factor using nested interval
+                    a1_inf_0 = u2_u0 <= 0
+                    a1_sup_0 = u2_u0 > 0
+                    l_max = np.min(lambdas[a1_sup_0]) if any(a1_sup_0) else float("inf")
+                    l_min = (
+                        np.max(lambdas[a1_inf_0]) if any(a1_inf_0) else -float("inf")
+                    )
+                    # Check if the interval is valid
+                    if l_max < l_min:
+                        raise RuntimeError(
+                            f"The maximal increment of load factor is inferior the the minimal (min: {l_min:.3g}, max: {l_max:.3g}.)"
+                        )
+                    # Choose the load factor as the upper bound
+                    self.l = l_max
+                else:
+                    print("No control node :(")
+                    self.l = self.l0 + self.dl
 
             case "max_inc_undamaged_elastic_energy":
                 # Update the coefficients
