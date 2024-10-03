@@ -2,7 +2,7 @@ import numpy as np
 import sympy as sp
 
 
-from dolfinx import fem
+from dolfinx import io, fem
 import ufl
 
 
@@ -95,6 +95,12 @@ class BaseModel:
             # Create the fem function
             par_func = fem.Function(V_par)
             par_func.interpolate(par_lambda)
+            # Export the function
+            vtk_file = io.VTKFile(
+                domain.mesh.comm, "results/heterogeneous_parameter.pvd", "w"
+            )
+            vtk_file.write_function(par_func, 0)
+            vtk_file.close()
             # Return the fem function
             return par_func
 
