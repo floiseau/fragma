@@ -1137,7 +1137,7 @@ class CrackPhaseSubProblem:
         problem_alpha.setTolerances(atol=1e-12, rtol=1e-12, max_it=50)
 
         # Set the KSP
-        problem_alpha.getKSP().setType("gmres")
+        problem_alpha.getKSP().setType("cg")
         problem_alpha.getKSP().setTolerances(atol=1e-15, rtol=1e-15)
         problem_alpha.getKSP().getPC().setType("mg")
         problem_alpha.getKSP().getPC().setMGLevels(1)
