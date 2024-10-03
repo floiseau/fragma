@@ -427,13 +427,17 @@ class DisplacementSubProblem:
         # Derivative of the energy with respect to displacement to obtain the linear problem to determine the stationary point
         E_u = ufl.derivative(energy, u, ufl.TestFunction(V_u))
         E_du = ufl.replace(E_u, {u: ufl.TrialFunction(V_u)})
-        # Define the displacement problem
-        problem_u = LinearProblem(
-            a=ufl.lhs(E_du),
-            L=ufl.rhs(E_du),
-            bcs=bcs_u,
-            u=u,
-            petsc_options={
+        # Define PETSc solver
+        direct_solver = True
+        if direct_solver:
+            petsc_options = {
+                "ksp_type": "preonly",
+                "pc_type": "cholesky",
+                "pc_factor_mat_solver_type": "cholmod",
+                # "pc_factor_mat_solver_type": "mumps",
+            }
+        else:
+            petsc_options = {
                 "ksp_type": "cg",
                 "ksp_rtol": 1e-12,
                 "ksp_atol": 1e-12,
@@ -441,12 +445,18 @@ class DisplacementSubProblem:
                 "pc_type": "gamg",
                 "pc_gamg_agg_nsmooths": 1,
                 "pc_gamg_esteig_ksp_type": "cg",
-            },
-            # petsc_options={
-            #     "ksp_type": "preonly",
-            #     "pc_type": "lu",
-            #     "pc_factor_solver_type": "mumps",
-            # },
+                "pc_gamg_type": "agg",  # Aggressive coarsening
+                "mg_levels_ksp_type": "chebyshev",
+                "mg_levels_pc_type": "jacobi",
+            }
+
+        # Define the displacement problem
+        problem_u = LinearProblem(
+            a=ufl.lhs(E_du),
+            L=ufl.rhs(E_du),
+            bcs=bcs_u,
+            u=u,
+            petsc_options=petsc_options,
         )
         # Define the null space (optimization with GAMG PC)
         ns = build_elasticity_nullspace(V_u)
@@ -455,7 +465,8 @@ class DisplacementSubProblem:
         # Set block size
         problem_u.A.setBlockSize(V_u.mesh.geometry.dim)
         # Set nonzero initial guess
-        problem_u.solver.setInitialGuessNonzero(True)
+        if not direct_solver:
+            problem_u.solver.setInitialGuessNonzero(True)
         # Display information about the displacement solver
         problem_u.solver.view()
         # Store the problem
