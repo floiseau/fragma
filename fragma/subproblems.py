@@ -1131,27 +1131,35 @@ class CrackPhaseSubProblem:
 
         # Create the nonlinear solver
         problem_alpha = PETSc.SNES().create()
-        problem_alpha.setType("vinewtonrsls")
-        problem_alpha.setFunction(snes_problem_alpha.F, b)
-        problem_alpha.setJacobian(snes_problem_alpha.J, J)
-        problem_alpha.setTolerances(atol=1e-12, rtol=1e-12, max_it=50)
+        self.variational_bounds = not model.irreversibility == "penalization"
+        if self.variational_bounds:
+            problem_alpha.setType("vinewtonrsls")
+            problem_alpha.setFunction(snes_problem_alpha.F, b)
+            problem_alpha.setJacobian(snes_problem_alpha.J, J)
+            problem_alpha.setTolerances(atol=1e-12, rtol=1e-12, max_it=50)
 
-        # Set the KSP
-        problem_alpha.getKSP().setType("cg")
-        problem_alpha.getKSP().setTolerances(atol=1e-15, rtol=1e-15)
-        problem_alpha.getKSP().getPC().setType("mg")
-        problem_alpha.getKSP().getPC().setMGLevels(1)
-        problem_alpha.getKSP().setInitialGuessNonzero(True)
-
-        # Define lower and upper bounds functions for the crack phase field
-        self.alpha_lb = alpha.copy()
-        self.alpha_ub = alpha.copy()
-        # Set the upper bound
-        with self.alpha_ub.vector.localForm() as alpha_ub_local:
-            alpha_ub_local.set(1.0)
-        fem.set_bc(self.alpha_ub.vector, bcs_alpha)
-        # Set the crack phrase boundary bound (Note: they are passed as reference and not as values)
-        problem_alpha.setVariableBounds(self.alpha_lb.vector, self.alpha_ub.vector)
+            # Set the KSP
+            problem_alpha.getKSP().setType("cg")
+            problem_alpha.getKSP().setTolerances(atol=1e-15, rtol=1e-15)
+            problem_alpha.getKSP().getPC().setType("mg")
+            problem_alpha.getKSP().getPC().setMGLevels(1)
+            problem_alpha.getKSP().setInitialGuessNonzero(True)
+            # Define lower and upper bounds functions for the crack phase field
+            self.alpha_lb = alpha.copy()
+            self.alpha_ub = alpha.copy()
+            # Set the upper bound
+            with self.alpha_ub.vector.localForm() as alpha_ub_local:
+                alpha_ub_local.set(1.0)
+            fem.set_bc(self.alpha_ub.vector, bcs_alpha)
+            # Set the crack phrase boundary bound (Note: they are passed as reference and not as values)
+            problem_alpha.setVariableBounds(self.alpha_lb.vector, self.alpha_ub.vector)
+            #
+            self.variational_bounds = True
+        else:
+            problem_alpha.setType("newtonls")
+            problem_alpha.setFunction(snes_problem_alpha.F, b)
+            problem_alpha.setJacobian(snes_problem_alpha.J, J)
+            problem_alpha.setTolerances(atol=1e-12, rtol=1e-12, max_it=50)
 
         # Display information about the displacement solver
         problem_alpha.view()
@@ -1281,7 +1289,8 @@ class CrackPhaseSubProblem:
             Current time.
         """
         # Update the crack phase lower bound
-        self.alpha.vector.copy(self.alpha_lb.vector)
+        if self.variational_bounds:
+            self.alpha.vector.copy(self.alpha_lb.vector)
         # Update of boundary conditions ?
         self.update_boundary_conditions(t)
 

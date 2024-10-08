@@ -293,6 +293,14 @@ class FractureModel(ElasticModel):
                 if "theta_0" in pars["mechanical"]
                 else 0
             )
+        # Check the irreversility
+        self.irreversibility = pars["model"]["irreversibility"]
+        match self.irreversibility:
+            case "penalization":
+                print("Impose irreversibility using penalization.")
+                self.tol_ir = pars["model"]["irreversibility_tolerance"]
+            case _:
+                print("Impose irreversibility using variational bounds.")
 
     def a(self, alpha):
         """
@@ -466,33 +474,130 @@ class FractureModel(ElasticModel):
         Gc = self.Gc
         ell = self.ell
         cw = self.cw()
-        # Compute the anisotropy matrix
-        A = ufl.as_tensor(np.eye(domain.mesh.geometry.dim))
-        # Add the higher order terms if the model is anisotropic
-        if self.is_anisotropic:
-            # Get the parameters
-            aG, theta_0 = self.aG, self.theta_0
-            #  Compute the 2nd order term of the anisotropy tensor
-            A += aG * ufl.as_tensor(
-                np.array(
+        # Check the model
+        match self.dis_model:
+            case "Foc2":
+                # TODO Replace the anisotropy tensor representation by the harmonic decomposition (or another tensor decomposition depending on the indicial symmetries !!!)
+                # Parameters
+                omega = np.pi / 4
+                tau = 0.5
+                # Define the anistropy tensor
+                id2 = ufl.Identity(2)
+                D = ufl.as_tensor(
                     [
-                        [np.cos(2 * theta_0), np.sin(2 * theta_0)],
-                        [np.sin(2 * theta_0), -np.cos(2 * theta_0)],
+                        [ufl.cos(2 * omega), ufl.sin(2 * omega)],
+                        [ufl.sin(2 * omega), -ufl.cos(2 * omega)],
                     ]
                 )
-            )
-        # Define the energy terms
-        dissipated_energy = (
-            Gc
-            / cw
-            * (
-                self.w(alpha) / ell
-                + ell * ufl.dot(ufl.grad(alpha), A * ufl.grad(alpha))
-            )
-            * dx
-        )
+                B = id2 - tau * D
+                # Define the anisotropy function
+                grada = ufl.grad(alpha)
+                grad2 = ufl.outer(grada, grada)
+                phi2 = ufl.inner(B, grad2)
+                # Define the dissipation terms
+                dissipated_energy = Gc / cw * (self.w(alpha) / ell + ell * phi2) * dx
+            case "Foc4":
+                # TODO Replace the anisotropy tensor representation by the harmonic decomposition (or another tensor decomposition depending on the indicial symmetries !!!)
+
+                # TODO Need to change the solver for this case as the energy in non-convex!!!!
+                # TODO Need to change the solver for this case as the energy in non-convex!!!!
+                # TODO Need to change the solver for this case as the energy in non-convex!!!!
+                # TODO Need to change the solver for this case as the energy in non-convex!!!!
+                # TODO Need to change the solver for this case as the energy in non-convex!!!!
+                # TODO Need to change the solver for this case as the energy in non-convex!!!!
+
+                # Parameters
+                omega = 0
+                tau = 0  # 0.5
+                # Define the anistropy tensor
+                id2 = ufl.Identity(2)
+                D_np = np.empty((2, 2, 2, 2))
+                D_np[0, 0, 0, 0] = -ufl.cos(4 * omega)
+                D_np[1, 1, 1, 1] = D_np[0, 0, 0, 0]
+                D_np[0, 0, 1, 1] = ufl.cos(4 * omega)
+                D_np[1, 1, 0, 0] = D_np[0, 0, 1, 1]
+                D_np[0, 1, 0, 1] = D_np[0, 0, 1, 1]
+                D_np[1, 0, 1, 0] = D_np[0, 0, 1, 1]
+                D_np[0, 1, 1, 0] = D_np[0, 0, 1, 1]
+                D_np[1, 0, 0, 1] = D_np[0, 0, 1, 1]
+                D_np[0, 0, 0, 1] = -ufl.sin(4 * omega)
+                D_np[0, 0, 1, 0] = D_np[0, 0, 0, 1]
+                D_np[0, 1, 0, 0] = D_np[0, 0, 0, 1]
+                D_np[1, 0, 0, 0] = D_np[0, 0, 0, 1]
+                D_np[1, 1, 1, 0] = ufl.sin(4 * omega)
+                D_np[1, 1, 0, 1] = D_np[1, 1, 1, 0]
+                D_np[1, 0, 1, 1] = D_np[1, 1, 1, 0]
+                D_np[0, 1, 1, 1] = D_np[1, 1, 1, 0]
+                D = ufl.as_tensor(D_np)
+                B = ufl.outer(id2, id2) - tau * D
+                # Define the anisotropy function
+                grada = ufl.grad(alpha)
+                grad2 = ufl.outer(grada, grada)
+                grad4 = ufl.outer(grad2, grad2)
+                phi4 = ufl.inner(B, grad4)
+                # Define the dissipation terms
+                dissipated_energy = Gc / cw * (self.w(alpha) / ell + ell**3 * phi4) * dx
+            case _:
+                # Compute the anisotropy matrix
+                A = ufl.as_tensor(np.eye(domain.mesh.geometry.dim))
+                # Add the higher order terms if the model is anisotropic
+                if self.is_anisotropic:
+                    # Get the parameters
+                    aG, theta_0 = self.aG, self.theta_0
+                    #  Compute the 2nd order term of the anisotropy tensor
+                    A += aG * ufl.as_tensor(
+                        np.array(
+                            [
+                                [np.cos(2 * theta_0), np.sin(2 * theta_0)],
+                                [np.sin(2 * theta_0), -np.cos(2 * theta_0)],
+                            ]
+                        )
+                    )
+                # Define the energy terms
+                dissipated_energy = (
+                    Gc
+                    / cw
+                    * (
+                        self.w(alpha) / ell
+                        + ell * ufl.dot(ufl.grad(alpha), A * ufl.grad(alpha))
+                    )
+                    * dx
+                )
         # Define the total energy
         return dissipated_energy
+
+    def irreversibility_penalization(self, state, domain):
+        """
+        Computes the irreversibility penalization term for a phase-field fracture model.
+
+        This method calculates a penalization term to ensure irreversibility of the crack phase.
+
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing state variables.
+        domain : Domain
+            The domain object representing the computational domain.
+
+        Returns
+        -------
+        ufl.form.Expression:
+            The irreversibility penalization term as a UFL integral form.
+        """
+
+        # Get the state
+        alpha = state["alpha"]
+        alpha0 = state["alpha0"]
+        # Get the measure
+        dx = ufl.Measure("dx", domain=domain.mesh)
+        # Define the penalization coefficient
+        match self.deg_model:
+            case "AT1":
+                p = self.Gc / self.ell * 27 / 64 / self.tol_ir**2
+            case _:
+                p = self.Gc / self.ell * (1 / self.tol_ir**2 - 1)
+        # Define the integral
+        return p / 2 * ufl.max_value(-(alpha - alpha0), 0) ** 2 * dx
 
     def energy(self, state, domain):
         """
@@ -513,5 +618,10 @@ class FractureModel(ElasticModel):
         # Define the energy terms
         elastic_energy = self.elastic_energy(state, domain)
         dissipated_energy = self.fracture_dissipation(state, domain)
+        penalization = (
+            self.irreversibility_penalization(state, domain)
+            if self.irreversibility == "penalization"
+            else 0
+        )
         # Define the total energy
-        return elastic_energy + dissipated_energy
+        return elastic_energy + dissipated_energy + penalization
