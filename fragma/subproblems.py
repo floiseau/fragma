@@ -1074,8 +1074,7 @@ class CrackPhaseSubProblem:
             problem_alpha.setHessian(tao_problem_alpha.J, tao_problem_alpha.A)
 
             # Set up the solver
-            problem_alpha.setType("bntr")
-            # problem_alpha.setType("bntl")
+            problem_alpha.setType("bntl") # btnr
 
             # Set the tolerances
             # opts.setValue("tao_gatol", 1e-5) # Value of the residual
