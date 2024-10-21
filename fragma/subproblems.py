@@ -1289,12 +1289,29 @@ class CrackPhaseSubProblem:
             Current time.
         """
         # Update the crack phase lower bound
-        if self.variational_bounds:
-            self.alpha.vector.copy(self.alpha_lb.vector)
+        self.alpha.vector.copy(self.alpha_lb.vector)
         # Update of boundary conditions ?
         self.update_boundary_conditions(t)
 
     def solve(self):
         """Solve the crack phase sub-problem."""
-        self.problem_alpha.solve(None, self.alpha.vector)
-        self.alpha.x.scatter_forward()
+        # Initialiaze the restart in case of solver failure
+        reason = PETSc.SNES.ConvergedReason.DIVERGED_TR_DELTA
+        restart_reasons = [
+            PETSc.SNES.ConvergedReason.DIVERGED_TR_DELTA,
+            PETSc.SNES.ConvergedReason.DIVERGED_DTOL,
+            PETSc.SNES.ConvergedReason.DIVERGED_LINE_SEARCH,
+            PETSc.SNES.ConvergedReason.DIVERGED_LINEAR_SOLVE,
+            PETSc.SNES.ConvergedReason.DIVERGED_MAX_IT,
+            PETSc.SNES.ConvergedReason.DIVERGED_FNORM_NAN,
+            # PETSc.SNES.ConvergedReason.DIVERGED_TR_REDUCTION
+        ]
+        while reason in restart_reasons:
+            # self.problem_alpha.solve(None, self.alpha.vector)
+            self.problem_alpha.solve(self.alpha.vector)
+            self.alpha.x.scatter_forward()
+            # Check if the solver converged
+            reason = self.problem_alpha.getConvergedReason()
+            if reason in restart_reasons:
+                print("Restarting the crack phase solver due to failure to converge.")
+

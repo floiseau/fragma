@@ -293,14 +293,6 @@ class FractureModel(ElasticModel):
                 if "theta_0" in pars["mechanical"]
                 else 0
             )
-        # Check the irreversility
-        self.irreversibility = pars["model"]["irreversibility"]
-        match self.irreversibility:
-            case "penalization":
-                print("Impose irreversibility using penalization.")
-                self.tol_ir = pars["model"]["irreversibility_tolerance"]
-            case _:
-                print("Impose irreversibility using variational bounds.")
 
     def a(self, alpha):
         """
@@ -566,39 +558,6 @@ class FractureModel(ElasticModel):
         # Define the total energy
         return dissipated_energy
 
-    def irreversibility_penalization(self, state, domain):
-        """
-        Computes the irreversibility penalization term for a phase-field fracture model.
-
-        This method calculates a penalization term to ensure irreversibility of the crack phase.
-
-        Parameters
-        ----------
-        state : dict
-            Dictionary containing state variables.
-        domain : Domain
-            The domain object representing the computational domain.
-
-        Returns
-        -------
-        ufl.form.Expression:
-            The irreversibility penalization term as a UFL integral form.
-        """
-
-        # Get the state
-        alpha = state["alpha"]
-        alpha0 = state["alpha0"]
-        # Get the measure
-        dx = ufl.Measure("dx", domain=domain.mesh)
-        # Define the penalization coefficient
-        match self.deg_model:
-            case "AT1":
-                p = self.Gc / self.ell * 27 / 64 / self.tol_ir**2
-            case _:
-                p = self.Gc / self.ell * (1 / self.tol_ir**2 - 1)
-        # Define the integral
-        return p / 2 * ufl.max_value(-(alpha - alpha0), 0) ** 2 * dx
-
     def energy(self, state, domain):
         """
         Compute the energy.
@@ -618,10 +577,5 @@ class FractureModel(ElasticModel):
         # Define the energy terms
         elastic_energy = self.elastic_energy(state, domain)
         dissipated_energy = self.fracture_dissipation(state, domain)
-        penalization = (
-            self.irreversibility_penalization(state, domain)
-            if self.irreversibility == "penalization"
-            else 0
-        )
         # Define the total energy
-        return elastic_energy + dissipated_energy + penalization
+        return elastic_energy + dissipated_energy

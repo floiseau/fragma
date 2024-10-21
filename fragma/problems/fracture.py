@@ -57,10 +57,7 @@ class FractureProblem(BaseProblem):
         # Define the fracture phase field
         self.V_alpha = fem.functionspace(self.domain.mesh, ("Lagrange", 1))
         alpha = fem.Function(self.V_alpha, name="CrackPhase")
-        # Define the previous crack phase
-        alpha0 = alpha.copy()
-        # Define the state vector
-        self.state = {"u": u, "alpha": alpha, "alpha0": alpha0}
+        self.state = {"u": u, "alpha": alpha}
 
     def define_model(self, domain):
         """
@@ -128,10 +125,7 @@ class FractureProblem(BaseProblem):
         iterations is reached.
         """
         # Get the state
-        u, alpha, alpha0 = self.state["u"], self.state["alpha"], self.state["alpha0"]
-        # Update alpha0
-        alpha0.x.array[:] = alpha.x.array
-        alpha0.x.scatter_forward()
+        u, alpha = self.state["u"], self.state["alpha"]
         # Define state at previous iteration for error computation
         u_old, alpha_old = u.copy(), alpha.copy()
         # Initialize the errors
