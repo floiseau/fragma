@@ -7,6 +7,7 @@ This module provides classes for defining sub-problems that solve for displaceme
 from math import isnan
 
 import numpy as np
+from mpi4py import MPI
 from petsc4py import PETSc
 
 import dolfinx
@@ -15,7 +16,7 @@ from dolfinx.fem.petsc import LinearProblem
 import ufl
 
 from utils.build_nullspace import build_elasticity_nullspace
-from utils.snes_problem import SNESProblem
+from utils.petsc_problems import SNESProblem, TAOProblem
 
 
 def create_displacement_subproblem(pars, domain, state, model):
@@ -284,13 +285,16 @@ class DisplacementSubProblem:
                     bc_local.set(
                         default_scalar_type(t * self.u_imp_max[facet_name][comp])
                     )
+                load_func.x.scatter_forward()
         # Iterate through the force load functions
         for facet_name, f_imp in self.f_imp_max.items():
             self.bcf_funcs[facet_name].value = t * np.array(f_imp)
+            self.bcf_funcs[facet_name].x.scatter_forward()
         # Iterate through the contact force load functions
         for facet_name, fc in self.fc_max.items():
             F = fc["F"]
             self.bcf_funcs[facet_name].value = t * np.array(F)
+            self.bcf_funcs[facet_name].x.scatter_forward()
 
     def compute_external_work(self, domain, state):
         """
@@ -439,8 +443,8 @@ class DisplacementSubProblem:
         else:
             petsc_options = {
                 "ksp_type": "cg",
-                "ksp_rtol": 1e-12,
-                "ksp_atol": 1e-12,
+                "ksp_rtol": 1e-8,
+                "ksp_atol": 1e-10,
                 "ksp_max_it": 1000,
                 "pc_type": "gamg",
                 "pc_gamg_agg_nsmooths": 1,
@@ -613,27 +617,6 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 self.u0_u0 = fem.Function(V_u_scal, name="a0")
                 self.u_u0 = fem.Function(V_u_scal, name="a1")
 
-            case "pz_local_arc_length":
-                # Initialize previous crack phase
-                self.alpha0 = self.alpha.copy()
-                # Get state variables
-                u0 = self.u0
-                u2 = self.u2
-                # Define a function space for displacements dot product
-                V_u_scal = fem.functionspace(domain.mesh, ("Lagrange", 1))
-                # Get the coefficients expressions
-                self.u0_u0_expr = fem.Expression(
-                    ufl.dot(u0, u0),
-                    V_u_scal.element.interpolation_points(),
-                )
-                self.u2_u0_expr = fem.Expression(
-                    ufl.dot(u2, u0),
-                    V_u_scal.element.interpolation_points(),
-                )
-                # Define the functions
-                self.u0_u0 = fem.Function(V_u_scal, name="a0")
-                self.u2_u0 = fem.Function(V_u_scal, name="a1")
-
             case "max_inc_undamaged_elastic_energy":
                 # Generate a function space for energy scalars
                 V_e = fem.functionspace(domain.mesh, ("DG", 0))
@@ -674,65 +657,7 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # Initialize tau2
                 self.tau2 = fem.assemble_scalar(self.tau2_form)
 
-            case "dissipation_v1":
-                # Initialize the previous tau
-                self.tau0 = 0
-                # Get the parameters
-                Gc = self.model.Gc
-                cw = self.model.cw()
-                ell = self.model.ell
-                # Get crack phase
-                alpha = self.alpha
-                # Compute the strain
-                eps2 = self.model.eps({"u": self.u2})
-                # Compute the stress
-                sig2 = self.model.sig({"u": self.u2})
-                # Define the form
-                # TODO Derivate the real a function from the model !
-                dx = ufl.Measure("dx", domain=domain.mesh)
-                self.tau2_form = fem.form(
-                    1
-                    / 2
-                    * (
-                        (1 - alpha) * alpha * ufl.inner(eps2, sig2)
-                        + Gc / cw * alpha / ell
-                    )
-                    * dx
-                )
-                # Initialize tau2
-                self.tau2 = fem.assemble_scalar(self.tau2_form)
-
-            case "dissipation_v2":
-                # Initialize the previous tau
-                self.tau0 = 0
-                # Get the parameters
-                Gc = self.model.Gc
-                cw = self.model.cw()
-                ell = self.model.ell
-                # Get crack phase
-                alpha = self.alpha
-                # Compute the strain
-                eps2 = self.model.eps({"u": self.u2})
-                # Compute the stress
-                sig2 = self.model.sig({"u": self.u2})
-                # Compute the grad of alpha
-                grad_a = ufl.grad(alpha)
-                # Define the form
-                # TODO Derivate the real a function from the model !
-                dx = ufl.Measure("dx", domain=domain.mesh)
-                self.tau2_form = fem.form(
-                    (
-                        (1 - alpha) * alpha * ufl.inner(eps2, sig2)
-                        - Gc / cw * ell * ufl.inner(grad_a, grad_a)
-                    )
-                    * dx
-                )
-                # Initialize tau2
-                self.tau2 = fem.assemble_scalar(self.tau2_form)
-
             case "max_crack_driving_variable":
-                # Initialize the previous tau
-                self.tau0 = 0
                 # Get crack phase
                 alpha = self.alpha
                 # Compute the strain
@@ -742,27 +667,24 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # Define the expressions
                 weight_expr = (1 - alpha) * alpha
                 energy_expr = ufl.inner(eps2, sig2)
-                # Compute the functions
-                V_w = fem.functionspace(domain.mesh, ("Lagrange", 1))
-                self.weight_expr = fem.Expression(
-                    weight_expr, V_w.element.interpolation_points()
+                # Define the load factor constant
+                self.l_cst = fem.Constant(domain.mesh, default_scalar_type(0))
+                # Compute the coefficient functions
+                V_coeff = fem.functionspace(domain.mesh, ("Lagrange", 1))
+                self.a1_expr = fem.Expression(
+                    2 * self.l_cst * weight_expr * energy_expr,
+                    V_coeff.element.interpolation_points(),
                 )
-                V_e = fem.functionspace(domain.mesh, ("DG", 0))
-                self.energy_expr = fem.Expression(
-                    energy_expr, V_e.element.interpolation_points()
+                self.a1 = fem.Function(V_coeff, name="a1")
+                # Compute the (local) crack driving variable
+                self.tau2_expr = fem.Expression(
+                    (1 - alpha) * alpha * ufl.inner(eps2, sig2),
+                    V_coeff.element.interpolation_points(),
                 )
-                self.weight = fem.Function(V_w, name="weight")
-                self.energy = fem.Function(V_e, name="energy")
-                # Initialize the weight and energy
-                self.weight.interpolate(self.weight_expr)
-                self.energy.interpolate(self.energy_expr)
-                # Define the forms
-                dx = ufl.Measure("dx", domain=domain.mesh)
-                self.tau2_form = fem.form(self.weight * self.energy * dx)
-                # Initialize tau2
-                self.tau2 = fem.assemble_scalar(self.tau2_form)
-                # Initialize previous energy
-                self.energy0 = self.energy.copy()
+                self.tau2 = fem.Function(V_coeff, name="tau2")
+                # Initialize tau2 and tau0
+                self.tau2.interpolate(self.tau2_expr)
+                self.tau0 = self.tau2.copy()
 
         # Initialization of the step size adapation
         self.step_size_adapation = "k_opt" in pars["loading"]
@@ -835,33 +757,18 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
             case "max_strain_inc":
                 # Update the previous normed strain field
                 self.eps0_normed.interpolate(self.eps0_normed_expr)
-            case "pz_local_arc_length":
-                # Compute the control region
-                a = self.alpha.x.array[:]
-                a0 = self.alpha0.x.array[:]
-                da = a - a0
-                cr = np.logical_and(da > 0, a < 0.6)
-                cr = np.logical_and(cr, a > 0.4)
-                # Select the node with the highest phase increment
-                self.control_region = cr if np.any(cr) else None
-                if np.any(self.control_region):
-                    print("Control equation: Control node found :)")
-                    print(self.control_region)
-                else:
-                    print("Control equation: No control node found :(")
-                # Update alpha0
-                self.alpha0.x.array[:] = self.alpha.x.array
             case "max_inc_undamaged_elastic_energy":
                 # Compute the coefficient a0 (does not change between load steps)
                 self.a0.interpolate(self.a0_expr)
-            case "crack_driving_variable" | "dissipation_v1" | "dissipation_v2":
+            case "crack_driving_variable":
                 # Update the previous tau value
                 self.tau2 = fem.assemble_scalar(self.tau2_form)
                 self.tau0 = self.l**2 * self.tau2
+
             case "max_crack_driving_variable":
                 # Update the previous tau value
-                self.tau0 = self.l**2 * self.tau2
-                self.energy0.x.array[:] = self.energy.x.array[:]
+                self.tau2.interpolate(self.tau2_expr)
+                self.tau0.x.array[:] = self.l**2 * self.tau2.x.array
 
     def select_control_equation(self):
         """Select the control equation.
@@ -980,35 +887,6 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # Choose the load factor as the upper bound
                 self.l = l_max
 
-            case "pz_local_arc_length":
-                # Update the coefficients
-                self.u0_u0.interpolate(self.u0_u0_expr)
-                self.u2_u0.interpolate(self.u2_u0_expr)
-                # Check if the control region is empty
-                if np.any(self.control_region):
-                    # Compute the dot products
-                    u2_u0 = self.u2_u0.x.array[self.control_region]
-                    u0_u0 = self.u0_u0.x.array[self.control_region]
-                    # Compute load factor for each element
-                    lambdas = (self.dtau**2 + u0_u0) / u2_u0
-                    # Choose the load factor using nested interval
-                    a1_inf_0 = u2_u0 <= 0
-                    a1_sup_0 = u2_u0 > 0
-                    l_max = np.min(lambdas[a1_sup_0]) if any(a1_sup_0) else float("inf")
-                    l_min = (
-                        np.max(lambdas[a1_inf_0]) if any(a1_inf_0) else -float("inf")
-                    )
-                    # Check if the interval is valid
-                    if l_max < l_min:
-                        raise RuntimeError(
-                            f"The maximal increment of load factor is inferior the the minimal (min: {l_min:.3g}, max: {l_max:.3g}.)"
-                        )
-                    # Choose the load factor as the upper bound
-                    self.l = l_max
-                else:
-                    print("No control node :(")
-                    self.l = self.l0 + self.dl
-
             case "max_inc_undamaged_elastic_energy":
                 # Update the coefficients
                 self.a1.interpolate(self.a1_expr)
@@ -1026,23 +904,48 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # Choose the load factor as the upper bound
                 self.l = l_max
 
-            case "crack_driving_variable" | "dissipation_v1" | "dissipation_v2":
+            case "crack_driving_variable":
                 # Compute tau2
                 self.tau2 = fem.assemble_scalar(self.tau2_form)
                 # Compute the load factor
                 self.l = np.sqrt((self.dtau + self.tau0) / self.tau2)
 
             case "max_crack_driving_variable":
-                # Update the functions
-                self.weight.interpolate(self.weight_expr)
-                self.energy.interpolate(self.energy_expr)
-                self.energy.x.array[:] = np.maximum(
-                    self.energy.x.array[:], self.energy0.x.array[:]
-                )
-                # Compute tau2
-                self.tau2 = fem.assemble_scalar(self.tau2_form)
-                # Compute the load factor
-                self.l = np.sqrt((self.dtau + self.tau0) / self.tau2)
+                if self.k < 2:
+                    self.l = self.l0 + self.dl
+                else:
+                    # Update the load factor constant
+                    self.l_cst.value = self.l
+                    # Update the functions
+                    self.a1.interpolate(self.a1_expr)
+                    self.tau2.interpolate(self.tau2_expr)
+                    # Apply a filter
+                    mask = np.logical_and(
+                        self.a1.x.array != 0,
+                        self.l**2 * self.tau2.x.array[:] > self.tau0.x.array[:],
+                    )
+                    # Filter out the nodes where the crack driving variable is null
+                    a0 = self.l**2 * self.tau2.x.array[mask] - self.tau0.x.array[mask]
+                    a1 = self.a1.x.array[mask]
+                    # Compute the increments
+                    dlambdas = (self.dtau - a0) / a1
+                    # Choose the load factor using nested interval
+                    a1_inf_0 = a1 <= 0
+                    a1_sup_0 = a1 > 0
+                    dl_max = (
+                        np.min(dlambdas[a1_sup_0]) if any(a1_sup_0) else float("inf")
+                    )
+                    dl_min = (
+                        np.max(dlambdas[a1_inf_0]) if any(a1_inf_0) else -float("inf")
+                    )
+                    # Check if the interval is valid
+                    if dl_max < dl_min:
+                        raise RuntimeError(
+                            f"The maximal increment of load factor is inferior the the minimal (min: {dl_min:.3g}, max: {dl_max:.3g}.)"
+                        )
+                    print(dl_min, dl_max)
+                    # Choose the load factor as the upper bound
+                    self.l += 0.5 * dl_max
 
         # Update the displacement
         self.u.x.array[:] = self.u1.x.array + self.l * self.u2.x.array
@@ -1084,6 +987,8 @@ class CrackPhaseSubProblem:
         model : BaseModel
             The material model used in the simulation.
         """
+        # Get the solver type
+        self.petsc_solver = pars["numerical"].get("nl_solver", "snes")
         # Define the initial crack field
         self.define_initial_crack_field(pars, domain, state, model)
         # Define the boundary conditions functions
@@ -1122,44 +1027,74 @@ class CrackPhaseSubProblem:
         E_alpha = ufl.derivative(energy, alpha, ufl.TestFunction(V_alpha))
         E_alpha_alpha = ufl.derivative(E_alpha, alpha, ufl.TrialFunction(V_alpha))
 
-        # Define the crack phase problem
-        snes_problem_alpha = SNESProblem(E_alpha, E_alpha_alpha, alpha, bcs_alpha)
-        # Initialize the LHS
-        b = fem.petsc.create_vector(snes_problem_alpha.L)
-        # Initialize the jacobian
-        J = fem.petsc.create_matrix(fem.form(snes_problem_alpha.a))
+        # Initialize PETSc options
+        opts = PETSc.Options()
+        opts.setValue("snes_monitor", None)
+        opts.setValue("snes_converged_reason", None)
+        opts.setValue("tao_monitor", None)
+        opts.setValue("tao_converged_reason", None)
 
-        # Create the nonlinear solver
-        problem_alpha = PETSc.SNES().create()
-        self.variational_bounds = not model.irreversibility == "penalization"
-        if self.variational_bounds:
+        # Choose the solver for the bounded nonlinear problem
+        if self.petsc_solver == "snes":
+            # Define the crack phase problem
+            snes_problem_alpha = SNESProblem(E_alpha, E_alpha_alpha, alpha, bcs_alpha)
+
+            # Create the nonlinear solver
+            problem_alpha = PETSc.SNES().create(MPI.COMM_WORLD)
+            problem_alpha.setFunction(snes_problem_alpha.F, snes_problem_alpha.b)
+            problem_alpha.setJacobian(snes_problem_alpha.J, snes_problem_alpha.A)
+            problem_alpha.setTolerances(atol=1e-5, rtol=1e-9, stol=1e-7, max_it=10_000)
+
+            # Set the SNES
             problem_alpha.setType("vinewtonrsls")
-            problem_alpha.setFunction(snes_problem_alpha.F, b)
-            problem_alpha.setJacobian(snes_problem_alpha.J, J)
-            problem_alpha.setTolerances(atol=1e-12, rtol=1e-12, max_it=50)
 
             # Set the KSP
-            problem_alpha.getKSP().setType("cg")
-            problem_alpha.getKSP().setTolerances(atol=1e-15, rtol=1e-15)
-            problem_alpha.getKSP().getPC().setType("mg")
-            problem_alpha.getKSP().getPC().setMGLevels(1)
-            problem_alpha.getKSP().setInitialGuessNonzero(True)
-            # Define lower and upper bounds functions for the crack phase field
-            self.alpha_lb = alpha.copy()
-            self.alpha_ub = alpha.copy()
-            # Set the upper bound
-            with self.alpha_ub.vector.localForm() as alpha_ub_local:
-                alpha_ub_local.set(1.0)
-            fem.set_bc(self.alpha_ub.vector, bcs_alpha)
-            # Set the crack phrase boundary bound (Note: they are passed as reference and not as values)
-            problem_alpha.setVariableBounds(self.alpha_lb.vector, self.alpha_ub.vector)
-            #
-            self.variational_bounds = True
-        else:
-            problem_alpha.setType("newtonls")
-            problem_alpha.setFunction(snes_problem_alpha.F, b)
-            problem_alpha.setJacobian(snes_problem_alpha.J, J)
-            problem_alpha.setTolerances(atol=1e-12, rtol=1e-12, max_it=50)
+            problem_alpha.getKSP().setType("preonly")
+            problem_alpha.getKSP().getPC().setType("cholesky")
+            problem_alpha.getKSP().getPC().setFactorSolverType("mumps")
+            # problem_alpha.getKSP().getPC().setFactorSolverType("cholmod")
+
+            # # Set the KSP
+            # problem_alpha.getKSP().setType("cg")
+            # problem_alpha.getKSP().setTolerances(atol=1e-10, rtol=1e-6)
+            # problem_alpha.getKSP().getPC().setType("mg")
+            # problem_alpha.getKSP().getPC().setMGLevels(1)
+            # problem_alpha.getKSP().setInitialGuessNonzero(True)
+
+        elif self.petsc_solver == "tao":
+            # Define the crack phase problem
+            tao_problem_alpha = TAOProblem(
+                energy, E_alpha, E_alpha_alpha, alpha, bcs_alpha
+            )
+
+            # Set up optimization problem
+            problem_alpha = PETSc.TAO().create(comm=MPI.COMM_WORLD)
+            problem_alpha.setObjective(tao_problem_alpha.f)
+            problem_alpha.setGradient(tao_problem_alpha.F, tao_problem_alpha.b)
+            problem_alpha.setHessian(tao_problem_alpha.J, tao_problem_alpha.A)
+
+            # Set up the solver
+            problem_alpha.setType("bntr")
+            # problem_alpha.setType("bntl")
+
+            # Set the tolerances
+            # opts.setValue("tao_gatol", 1e-5) # Value of the residual
+            opts.setValue("tao_grtol", 1e-4)  # Relative change in the residual
+            # opts.setValue("tao_gttol", 1e-9)
+            opts.setValue("tao_max_it", 10_000)
+
+        # Define lower and upper bounds functions for the crack phase field
+        self.alpha_lb = alpha.copy()
+        self.alpha_ub = alpha.copy()
+        # Set the upper bound
+        with self.alpha_ub.vector.localForm() as alpha_ub_local:
+            alpha_ub_local.set(1.0)
+        fem.set_bc(self.alpha_ub.vector, bcs_alpha)
+        # Set the crack phrase boundary bound (Note: they are passed as reference and not as values)
+        problem_alpha.setVariableBounds(self.alpha_lb.vector, self.alpha_ub.vector)
+
+        # Set options
+        problem_alpha.setFromOptions()
 
         # Display information about the displacement solver
         problem_alpha.view()
@@ -1307,11 +1242,12 @@ class CrackPhaseSubProblem:
             # PETSc.SNES.ConvergedReason.DIVERGED_TR_REDUCTION
         ]
         while reason in restart_reasons:
-            # self.problem_alpha.solve(None, self.alpha.vector)
-            self.problem_alpha.solve(self.alpha.vector)
+            if self.petsc_solver == "snes":
+                self.problem_alpha.solve(None, self.alpha.vector)
+            elif self.petsc_solver == "tao":
+                self.problem_alpha.solve(self.alpha.vector)
             self.alpha.x.scatter_forward()
             # Check if the solver converged
             reason = self.problem_alpha.getConvergedReason()
             if reason in restart_reasons:
                 print("Restarting the crack phase solver due to failure to converge.")
-

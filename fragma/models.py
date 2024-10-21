@@ -293,6 +293,10 @@ class FractureModel(ElasticModel):
                 if "theta_0" in pars["mechanical"]
                 else 0
             )
+        # Check for model specific parameters
+        if self.dis_model in ["Foc2", "Foc4"]:
+            self.tau = self.parse_parameter(pars["mechanical"]["tau"], domain)
+            self.omega = self.parse_parameter(pars["mechanical"]["omega"], domain)
 
     def a(self, alpha):
         """
@@ -312,12 +316,14 @@ class FractureModel(ElasticModel):
         alpha_res = self.alpha_res
         # Compute a
         match self.deg_model:
-            case "AT":
+            case "AT" | "Foc2":
                 return (1 - alpha) ** 2 + alpha_res
             case "KKL":
                 return 4 * (1 - alpha) ** 3 - 4 * (1 - alpha) ** 3 + alpha_res
             case "KSM":
                 return 3 * (1 - alpha) ** 2 - 3 * (1 - alpha) ** 2 + alpha_res
+            case "Foc4":
+                return (1 - alpha**4) ** 2 + alpha_res
             case _:
                 raise ValueError(
                     f"The degradation model named '{self.deg_model}' does not exists."
@@ -368,10 +374,13 @@ class FractureModel(ElasticModel):
         match self.dis_model:
             case "AT1":
                 return alpha
-            case "AT2":
+            case "AT2" | "Foc2":
                 return alpha**2
             case "DW":
                 return 16 * alpha**2 * (1 - alpha) ** 2
+            case "Foc4":
+                bw = 2 ** (-4 / 3)
+                return 3 / bw * alpha**4
             case _:
                 raise ValueError(
                     f"The degradation model named '{self.dis_model}' does not exists."
@@ -398,7 +407,7 @@ class FractureModel(ElasticModel):
             case "AT2":
                 return 2 * alpha
             case "DW":
-                return 16 * (2 * alpĥa * (1 - alpha) ** 2 - 2 * alpha**2 * (1 - alpha))
+                return 16 * (2 * alpha * (1 - alpha) ** 2 - 2 * alpha**2 * (1 - alpha))
             case _:
                 raise ValueError(
                     f"The degradation model named '{self.dis_model}' does not exists."
@@ -416,10 +425,12 @@ class FractureModel(ElasticModel):
         match self.dis_model:
             case "AT1":
                 return 8 / 3
-            case "AT2":
+            case "AT2" | "Foc2":
                 return 2
             case "DW":
                 return 4 * 2 / 3
+            case "Foc4":
+                return 4
             case _:
                 raise ValueError(
                     f"The degradation model named '{self.dis_model}' does not exists."
@@ -471,8 +482,8 @@ class FractureModel(ElasticModel):
             case "Foc2":
                 # TODO Replace the anisotropy tensor representation by the harmonic decomposition (or another tensor decomposition depending on the indicial symmetries !!!)
                 # Parameters
-                omega = np.pi / 4
-                tau = 0.5
+                omega = self.omega
+                tau = self.tau
                 # Define the anistropy tensor
                 id2 = ufl.Identity(2)
                 D = ufl.as_tensor(
@@ -490,17 +501,13 @@ class FractureModel(ElasticModel):
                 dissipated_energy = Gc / cw * (self.w(alpha) / ell + ell * phi2) * dx
             case "Foc4":
                 # TODO Replace the anisotropy tensor representation by the harmonic decomposition (or another tensor decomposition depending on the indicial symmetries !!!)
-
-                # TODO Need to change the solver for this case as the energy in non-convex!!!!
-                # TODO Need to change the solver for this case as the energy in non-convex!!!!
-                # TODO Need to change the solver for this case as the energy in non-convex!!!!
-                # TODO Need to change the solver for this case as the energy in non-convex!!!!
-                # TODO Need to change the solver for this case as the energy in non-convex!!!!
-                # TODO Need to change the solver for this case as the energy in non-convex!!!!
-
+                # TODO Replace the anisotropy tensor representation by the harmonic decomposition (or another tensor decomposition depending on the indicial symmetries !!!)
+                # TODO Replace the anisotropy tensor representation by the harmonic decomposition (or another tensor decomposition depending on the indicial symmetries !!!)
+                # TODO Replace the anisotropy tensor representation by the harmonic decomposition (or another tensor decomposition depending on the indicial symmetries !!!)
+                # TODO Replace the anisotropy tensor representation by the harmonic decomposition (or another tensor decomposition depending on the indicial symmetries !!!)
                 # Parameters
-                omega = 0
-                tau = 0  # 0.5
+                omega = self.omega
+                tau = self.tau
                 # Define the anistropy tensor
                 id2 = ufl.Identity(2)
                 D_np = np.empty((2, 2, 2, 2))
