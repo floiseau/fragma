@@ -1,6 +1,9 @@
 # Ignore the ressources directory
 ressources/
 
+# Ignore test examples
+examples/T*
+
 # Result files
 *.xdmf
 *.h5
