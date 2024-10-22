@@ -987,10 +987,10 @@ class CrackPhaseSubProblem:
         """
         # Get the solver type
         self.petsc_solver = pars["numerical"].get("nl_solver", "snes")
-        # Define the initial crack field
-        self.define_initial_crack_field(pars, domain, state, model)
         # Define the boundary conditions functions
         bcs_alpha = self.define_boundary_condition_functions(domain, state)
+        # Define the initial crack field
+        self.define_initial_crack_field(pars, domain, state, model, bcs_alpha)
         # Define the crack phase problem
         self.define_problem(domain, state, model, bcs_alpha)
 
@@ -1098,7 +1098,7 @@ class CrackPhaseSubProblem:
         # Store the problem on alpha in subproblems
         self.problem_alpha = problem_alpha
 
-    def define_initial_crack_field(self, pars, domain, state, model):
+    def define_initial_crack_field(self, pars, domain, state, model, bcs_alpha):
         """Define the initial crack field.
 
         This method computes the initial crack field based on the provided initial crack configuration
@@ -1114,6 +1114,8 @@ class CrackPhaseSubProblem:
             Dictionary containing state variables.
         model : fragma.models.BaseModel
             The material model used in the simulation.
+        bcs_alpha: List
+            List of boundary conditions for the crack phase sub-problem.
         """
         # Get the crack phase
         alpha = state["alpha"]
@@ -1147,6 +1149,9 @@ class CrackPhaseSubProblem:
 
         # Interpolate the initial crack field onto alpha
         alpha.interpolate(alpha_init)
+
+        # Add the boundary conditions
+        fem.set_bc(alpha.vector, bcs_alpha)
 
     def define_boundary_condition_functions(self, domain, state):
         """
