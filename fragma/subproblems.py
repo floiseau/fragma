@@ -648,12 +648,12 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 eps2 = self.model.eps({"u": self.u2})
                 # Compute the stress
                 sig2 = self.model.sig({"u": self.u2})
+                # Define the expressions
+                weight_expr = self.model.ap(alpha)
+                energy_expr = 1 / 2 * ufl.inner(eps2, sig2)
                 # Define the form
-                # TODO Derivate the real a function from the model !
                 dx = ufl.Measure("dx", domain=domain.mesh)
-                self.tau2_form = fem.form(
-                    (1 - alpha) * alpha * ufl.inner(eps2, sig2) * dx
-                )
+                self.tau2_form = fem.form(-weight_expr * energy_expr * dx)
                 # Initialize tau2
                 self.tau2 = fem.assemble_scalar(self.tau2_form)
 
@@ -665,8 +665,8 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # Compute the stress
                 sig2 = self.model.sig({"u": self.u2})
                 # Define the expressions
-                weight_expr = (1 - alpha) * alpha
-                energy_expr = ufl.inner(eps2, sig2)
+                weight_expr = self.model.ap(alpha)
+                energy_expr = 1 / 2 * ufl.inner(eps2, sig2)
                 # Define the load factor constant
                 self.l_cst = fem.Constant(domain.mesh, default_scalar_type(0))
                 # Compute the coefficient functions

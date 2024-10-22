@@ -343,18 +343,10 @@ class FractureModel(ElasticModel):
         ufl.form.Expression
             Derivative of the degradation function.
         """
-        # Compute w
-        match self.deg_model:
-            case "AT":
-                return -2 * (1 - alpha)
-            case "KKL":
-                return -12 * (1 - alpha) ** 2 + 12 * (1 - alpha) ** 3
-            case "KSM":
-                return -6 * (1 - alpha) + 6 * (1 - alpha) ** 2
-            case _:
-                raise ValueError(
-                    f"The degradation model named '{self.deg_model}' does not exists."
-                )
+        # Define a variable
+        alpha = ufl.variable(alpha)
+        # Comupute the derivative
+        return ufl.diff(self.a(alpha), alpha)
 
     def w(self, alpha):
         """
@@ -400,18 +392,10 @@ class FractureModel(ElasticModel):
         ufl.form.Expression
             Derivative of the dissipation function.
         """
-        # Compute w
-        match self.dis_model:
-            case "AT1":
-                return 1
-            case "AT2":
-                return 2 * alpha
-            case "DW":
-                return 16 * (2 * alpha * (1 - alpha) ** 2 - 2 * alpha**2 * (1 - alpha))
-            case _:
-                raise ValueError(
-                    f"The degradation model named '{self.dis_model}' does not exists."
-                )
+        # Define a variable
+        alpha = ufl.variable(alpha)
+        # Comupute the derivative
+        return ufl.diff(self.w(alpha), alpha)
 
     def cw(self):
         """
