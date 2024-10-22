@@ -75,7 +75,8 @@ class BaseModel:
             Strain tensor.
         """
         # Compute the thermal strain
-        return self.a_T * self.dT * ufl.Identity(2)
+        coeff = self.a_T * self.dT if self.thermal_load else 0
+        return coeff * ufl.Identity(2)
 
     def eps(self, state):
         """
