@@ -289,12 +289,10 @@ class DisplacementSubProblem:
         # Iterate through the force load functions
         for facet_name, f_imp in self.f_imp_max.items():
             self.bcf_funcs[facet_name].value = t * np.array(f_imp)
-            self.bcf_funcs[facet_name].x.scatter_forward()
         # Iterate through the contact force load functions
         for facet_name, fc in self.fc_max.items():
             F = fc["F"]
             self.bcf_funcs[facet_name].value = t * np.array(F)
-            self.bcf_funcs[facet_name].x.scatter_forward()
 
     def compute_external_work(self, domain, state):
         """
