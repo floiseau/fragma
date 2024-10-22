@@ -1,0 +1,31 @@
+[model]
+name = "elasticity"
+dim = 2
+2D_assumption = "plane_strain"
+
+[mesh]
+msh_file = "mesh.msh"
+
+[mesh.physical_groups]
+bot  = 5
+right = 6
+top  = 7
+left = 8
+
+[mechanical]
+E = 30e9
+nu = 0.3
+
+[loading]
+[loading.nodal_displacement]
+clamp.x  = [0, 0, 0]
+clamp.u  = [0, 0]
+rotat.x  = [1, 0, 0]
+rotat.u  = [nan, 0]
+[loading.thermal_load]
+thermal_expansion_coeff = 5e-5
+dT = 1000
+
+[end]
+criterion = "t"
+t_max = 10

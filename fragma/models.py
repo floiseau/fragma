@@ -1,9 +1,8 @@
 import numpy as np
-import sympy as sp
 
-
-from dolfinx import io, fem
 import ufl
+
+from utils.parameter_parser import parse_parameter
 
 
 class BaseModel:
@@ -37,13 +36,14 @@ class BaseModel:
             Domain object used to initialize heterogeneous properties.
         """
         # Get elastic parameters
-        self.E = self.parse_parameter(pars["mechanical"]["E"], domain)
-        self.nu = self.parse_parameter(pars["mechanical"]["nu"], domain)
+        self.E = parse_parameter(pars["mechanical"]["E"], domain)
+        self.nu = parse_parameter(pars["mechanical"]["nu"], domain)
         # Compute Lame coefficient
         self.la = self.E * self.nu / ((1 + self.nu) * (1 - 2 * self.nu))
         self.mu = self.E / (2 * (1 + self.nu))
         # Check the 2D assumption
-        if pars["model"]["dim"] == 2:
+        self.dim = pars["model"]["dim"]
+        if self.dim == 2:
             self.assumption = pars["model"]["2D_assumption"]
             match self.assumption:
                 case "plane_stress":
@@ -55,54 +55,27 @@ class BaseModel:
                     raise ValueError(
                         f'The 2D assumption "{self.assumption}" in unknown'
                     )
+        # Get the optional thermal load (to compute the thermal strain)
+        self.thermal_load = pars["loading"].get("thermal_load", {})
+        if self.thermal_load:
+            # Get the thermal expansion coefficient
+            self.a_T = parse_parameter(
+                self.thermal_load["thermal_expansion_coeff"], domain
+            )
+            # Get the temperature field (variation)
+            self.dT = parse_parameter(self.thermal_load["dT"], domain)
 
-    def parse_parameter(self, par, domain):
+    def eps_th(self):
         """
-        Parse the given parameter.
-
-        If the parameter is a number (integer or float), returns the raw number.
-        Otherwise, it interprets the parameter as a mathematical expression,
-        parses it using SymPy, and creates a finite element function representing
-        the parsed expression on the given domain.
-
-        Parameters
-        ----------
-        par : int, float, or sympy.Expr
-            The parameter to parse. If it's a number, it will be returned as is.
-            If it's a SymPy expression, it will be parsed and represented as a
-            finite element function.
-        domain : fragma.Domain.domain
-            The domain on which to interpolate the parsed parameter.
+        Compute the thermal strain (for thermal loads).
 
         Returns
         -------
-        par_value : int, float, or dolfinx.Function
-            The parsed parameter. If the parameter is a number, it will be returned
-            as is. If it's a SymPy expression, it will be represented as a finite
-            element function.
+        ufl.form.Expression
+            Strain tensor.
         """
-        # Check if the parameter is a number
-        if isinstance(par, (int, float)):
-            # Return the parameter as is
-            return par
-        else:
-            # Declare the coordinate symbol
-            x = sp.Symbol("x")
-            # Parse the expression using sympy
-            par_lambda = sp.utilities.lambdify(x, par, "numpy")
-            # Define the function space
-            V_par = fem.functionspace(domain.mesh, ("DG", 0))
-            # Create the fem function
-            par_func = fem.Function(V_par)
-            par_func.interpolate(par_lambda)
-            # Export the function
-            vtk_file = io.VTKFile(
-                domain.mesh.comm, "results/heterogeneous_parameter.pvd", "w"
-            )
-            vtk_file.write_function(par_func, 0)
-            vtk_file.close()
-            # Return the fem function
-            return par_func
+        # Compute the thermal strain
+        return self.a_T * self.dT * ufl.Identity(2)
 
     def eps(self, state):
         """
@@ -120,6 +93,61 @@ class BaseModel:
         """
         return ufl.sym(ufl.grad(state["u"]))
 
+    def eps_ela(self, state):
+        """
+        Compute the elastic strain tensor.
+
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing state variables.
+
+        Returns
+        -------
+        ufl.form.Expression
+            Strain tensor.
+        """
+        return self.eps(state) - self.eps_th()
+
+    def ela(self):
+        """
+        Compute the elasticity tensor.
+
+        Returns
+        -------
+        ufl.form.Expression
+            Elasticity tensor.
+        """
+        # Define index for tensorial notations
+        i, j, k, l = ufl.indices(4)
+        # Compute constant tensors
+        Id2 = ufl.Identity(self.dim)
+        Id2xId2 = ufl.outer(Id2, Id2)
+        Id4 = (
+            1
+            / 2
+            * ufl.as_tensor(Id2[i, k] * Id2[j, l] + Id2[i, l] * Id2[j, k], (i, j, k, l))
+        )
+        # Compute the elasticity tensor
+        return 2 * self.mu * Id4 + self.la * Id2xId2
+
+    def ela_eff(self, state):
+        """
+        Compute the effective elasticity tensor.
+
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing state variables.
+
+        Returns
+        -------
+        ufl.form.Expression
+            Elasticity tensor.
+        """
+        # Compute the elasticity tensor
+        return self.ela()
+
     def sig(self, state):
         """
         Compute the stress tensor.
@@ -134,12 +162,14 @@ class BaseModel:
         ufl.form.Expression
             Stress tensor.
         """
+        # Generate indices
+        i, j, k, l = ufl.indices(4)
         # Get elastic parameters
-        mu, la = self.mu, self.la
-        # Get the state variables
-        u = state["u"]
+        ela = self.ela()
+        # Compute the strain
+        eps = self.eps(state)
         # Compute the stess
-        return la * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2.0 * mu * self.eps(state)
+        return ufl.as_tensor(ela[i, j, k, l] * eps[k, l], (i, j))
 
     def sig_eff(self, state):
         """
@@ -155,7 +185,14 @@ class BaseModel:
         ufl.form.Expression
             Effective stress tensor.
         """
-        return self.sig(state)
+        # Generate indices
+        i, j, k, l = ufl.indices(4)
+        # Get elastic parameters
+        ela_eff = self.ela_eff(state)
+        # Compute the strain
+        eps = self.eps(state)
+        # Compute the stess
+        return ufl.as_tensor(ela_eff[i, j, k, l] * eps[k, l], (i, j))
 
     def energy(self, state, mesh):
         """
@@ -210,8 +247,12 @@ class ElasticModel(BaseModel):
         """
         # Get the integrands
         dx = ufl.Measure("dx", domain=domain.mesh)
+        # Compute the effective elasticity tensor
+        ela_eff = self.ela_eff(state)
+        # Compute the elastic strain
+        eps_ela = self.eps_ela(state)
         # Define the total energy
-        return 1 / 2 * ufl.inner(self.sig_eff(state), self.eps(state)) * dx
+        return 1 / 2 * ufl.inner(ela_eff, ufl.outer(eps_ela, eps_ela)) * dx
 
     def energy(self, state, domain):
         """
@@ -272,31 +313,29 @@ class FractureModel(ElasticModel):
         # Get the residual crack phase
         self.alpha_res = pars["numerical"]["alpha_res"]
         # Get fracture parameters
-        self.ell = self.parse_parameter(pars["mechanical"]["ell"], domain)
+        self.ell = parse_parameter(pars["mechanical"]["ell"], domain)
         # Check for anisotropy
         self.is_anisotropic = "theta_0" in pars["mechanical"]
         if not self.is_anisotropic:
             # Get the critical energy release rate
-            self.Gc = self.parse_parameter(pars["mechanical"]["Gc"], domain)
+            self.Gc = parse_parameter(pars["mechanical"]["Gc"], domain)
         else:
             # Get the critical energy release rate (min and max)
-            Gc_min = self.parse_parameter(pars["mechanical"]["Gc_min"], domain)
-            Gc_max = self.parse_parameter(pars["mechanical"]["Gc_max"], domain)
+            Gc_min = parse_parameter(pars["mechanical"]["Gc_min"], domain)
+            Gc_max = parse_parameter(pars["mechanical"]["Gc_max"], domain)
             # Convert to other model parameters
             self.Gc = ufl.sqrt(1 / 2 * (Gc_min**2 + Gc_max**2))
             self.aG = 1 / 2 * (Gc_max**2 - Gc_min**2) / self.Gc**2
             # Ge the anisotropy angle
             self.theta_0 = (
-                self.parse_parameter(pars["mechanical"]["theta_0"], domain)
-                * np.pi
-                / 180
+                parse_parameter(pars["mechanical"]["theta_0"], domain) * np.pi / 180
                 if "theta_0" in pars["mechanical"]
                 else 0
             )
         # Check for model specific parameters
         if self.dis_model in ["Foc2", "Foc4"]:
-            self.tau = self.parse_parameter(pars["mechanical"]["tau"], domain)
-            self.omega = self.parse_parameter(pars["mechanical"]["omega"], domain)
+            self.tau = parse_parameter(pars["mechanical"]["tau"], domain)
+            self.omega = parse_parameter(pars["mechanical"]["omega"], domain)
 
     def a(self, alpha):
         """
@@ -420,9 +459,9 @@ class FractureModel(ElasticModel):
                     f"The degradation model named '{self.dis_model}' does not exists."
                 )
 
-    def sig_eff(self, state):
+    def ela_eff(self, state):
         """
-        Effective stress accounting the degradation due to the crack phase.
+        Compute the effective elasticity tensor.
 
         Parameters
         ----------
@@ -432,9 +471,10 @@ class FractureModel(ElasticModel):
         Returns
         -------
         ufl.form.Expression
-            Effective stress.
+            Elasticity tensor.
         """
-        return self.a(state["alpha"]) * self.sig(state)
+        # Compute the elasticity tensor
+        return self.a(state["alpha"]) * self.ela()
 
     def fracture_dissipation(self, state, domain):
         """
