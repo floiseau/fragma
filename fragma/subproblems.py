@@ -94,6 +94,8 @@ class DisplacementSubProblem:
         model : BaseModel
             The material model used in the simulation.
         """
+        # Store the model
+        self.model = model
         # Initialize the load factor
         self.l = 0.0
         # Store the displacement loading
@@ -293,6 +295,10 @@ class DisplacementSubProblem:
         for facet_name, fc in self.fc_max.items():
             F = fc["F"]
             self.bcf_funcs[facet_name].value = t * np.array(F)
+        # Update potential thermal load
+        if self.model.thermal_load:
+            # Update the temperature field
+            self.model.dT.interpolate(lambda x: self.model.dT_lambda(x, t))
 
     def compute_external_work(self, domain, state):
         """
@@ -530,8 +536,6 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         super().__init__(pars, domain, state, model)
         # Store the constraint
         self.constraint = pars["loading"]["constraint"]
-        # Store the model
-        self.model = model
         # Initialize the load factor
         self.l0 = 0.0
         self.l = 0.0

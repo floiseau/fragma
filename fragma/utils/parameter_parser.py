@@ -3,7 +3,7 @@ import sympy as sp
 from dolfinx import io, fem
 
 
-def parse_parameter(par, domain):
+def parse_parameter(par, domain, export_lambda: bool = False):
     """
     Parse the given parameter.
 
@@ -20,6 +20,10 @@ def parse_parameter(par, domain):
         finite element function.
     domain : fragma.Domain.domain
         The domain on which to interpolate the parsed parameter.
+    export_lambda: bool
+        Export the lambda function used to interpolate the FEM function.
+        It is a function of both space and time. This is particularly
+        useful for time varying parameters (thermal load for instance).
 
     Returns
     -------
@@ -27,6 +31,9 @@ def parse_parameter(par, domain):
         The parsed parameter. If the parameter is a number, it will be returned
         as is. If it's a SymPy expression, it will be represented as a finite
         element function.
+    par_lambda : Optional, function
+        The python function used to interpolate the FEM function.
+        This is a function of both space and time.
     """
     # Check if the parameter is a number
     if isinstance(par, (int, float)):
@@ -34,19 +41,22 @@ def parse_parameter(par, domain):
         return par
     else:
         # Declare the coordinate symbol
-        x = sp.Symbol("x")
+        x, t = sp.Symbol("x"), sp.Symbol("t")
         # Parse the expression using sympy
-        par_lambda = sp.utilities.lambdify(x, par, "numpy")
+        par_lambda = sp.utilities.lambdify([x, t], par, "numpy")
         # Define the function space
         V_par = fem.functionspace(domain.mesh, ("DG", 0))
         # Create the fem function
-        par_func = fem.Function(V_par)
-        par_func.interpolate(par_lambda)
+        par_fem_func = fem.Function(V_par)
+        par_fem_func.interpolate(lambda xx: par_lambda(xx, 0))
         # Export the function
         vtk_file = io.VTKFile(
             domain.mesh.comm, "results/heterogeneous_parameter.pvd", "w"
         )
-        vtk_file.write_function(par_func, 0)
+        vtk_file.write_function(par_fem_func, 0)
         vtk_file.close()
         # Return the fem function
-        return par_func
+        if not export_lambda:
+            return par_fem_func
+        else:
+            return par_fem_func, par_lambda

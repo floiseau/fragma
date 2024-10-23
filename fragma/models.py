@@ -63,7 +63,9 @@ class BaseModel:
                 self.thermal_load["thermal_expansion_coeff"], domain
             )
             # Get the temperature field (variation)
-            self.dT = parse_parameter(self.thermal_load["dT"], domain)
+            self.dT, self.dT_lambda = parse_parameter(
+                self.thermal_load["dT"], domain, export_lambda=True
+            )
 
     def eps_th(self):
         """
