@@ -264,7 +264,7 @@ class DisplacementSubProblem:
                 )
         return bcs_u
 
-    def update_boundary_conditions(self, t: float):
+    def update_boundary_conditions(self, l: float):
         """
         Update boundary conditions for the displacement sub-problem.
 
@@ -272,8 +272,8 @@ class DisplacementSubProblem:
 
         Parameters
         ----------
-        t : float
-            Current time.
+        l : float
+            Load factor.
         """
         # Iterate through the displacement load functions
         for facet_name, load_dict in self.bcu_funcs.items():
@@ -285,20 +285,20 @@ class DisplacementSubProblem:
                 # Update the load function
                 with load_func.vector.localForm() as bc_local:
                     bc_local.set(
-                        default_scalar_type(t * self.u_imp_max[facet_name][comp])
+                        default_scalar_type(l * self.u_imp_max[facet_name][comp])
                     )
                 load_func.x.scatter_forward()
         # Iterate through the force load functions
         for facet_name, f_imp in self.f_imp_max.items():
-            self.bcf_funcs[facet_name].value = t * np.array(f_imp)
+            self.bcf_funcs[facet_name].value = l * np.array(f_imp)
         # Iterate through the contact force load functions
         for facet_name, fc in self.fc_max.items():
             F = fc["F"]
-            self.bcf_funcs[facet_name].value = t * np.array(F)
+            self.bcf_funcs[facet_name].value = l * np.array(F)
         # Update potential thermal load
         if self.model.thermal_load:
             # Update the temperature field
-            self.model.dT.interpolate(lambda x: self.model.dT_lambda(x, t))
+            self.model.dT.interpolate(lambda x: self.model.dT_lambda(x, l))
 
     def compute_external_work(self, domain, state):
         """
@@ -1205,7 +1205,7 @@ class CrackPhaseSubProblem:
         bcs_alpha += bcs_alpha_noncrackable
         return bcs_alpha
 
-    def update_boundary_conditions(self, t: float):
+    def update_boundary_conditions(self, l: float):
         """
         Update boundary conditions for the crack phase sub-problem.
 
@@ -1213,8 +1213,8 @@ class CrackPhaseSubProblem:
 
         Parameters
         ----------
-        t : float
-            Current time.
+        l : float
+            Load factor.
         """
         ...
 
