@@ -98,8 +98,10 @@ class DisplacementSubProblem:
         self.model = model
         # Initialize the load factor
         self.l = 0.0
-        # Store the displacement loading
+        # Store varying displacement loading
         self.u_imp_max = pars["loading"].get("u_imp_max", {})
+        # Store constant displacement loading
+        self.u_imp_const = pars["loading"].get("u_imp_const", {})
         # Store the force loading
         self.f_imp_max = pars["loading"].get("f_imp_max", {})
         # Store the contact force loading
@@ -234,7 +236,7 @@ class DisplacementSubProblem:
             for facet_name, boundary_facet in boundary_facets.items()
         }
 
-        print("\n████ INITIALIZE DISPLACEMENT BOUNDARY CONDITIONS")
+        print("\n████ INITIALIZE VARYING DISPLACEMENT BOUNDARY CONDITIONS")
         # Create variables to store bcs and loading functions
         bcs_u = []
         self.bcu_funcs = {}
@@ -262,6 +264,31 @@ class DisplacementSubProblem:
                         V_u,
                     )
                 )
+
+        print("\n████ INITIALIZE CONSTANT DISPLACEMENT BOUNDARY CONDITIONS")
+        # Iterage through the displacement loadings
+        for facet_name, u_imp in self.u_imp_const.items():
+            # Create a subdict for each components
+            self.bcu_funcs[facet_name] = {}
+            # Iterate through the axis
+            for comp in range(dim):
+                # Check if the DOF is imposed
+                if isnan(self.u_imp_const[facet_name][comp]):
+                    continue
+                # Define an FEM function (to control the BC)
+                func = fem.Function(V_u.sub(comp).collapse()[0])
+                # Update the load
+                with func.vector.localForm() as bc_local:
+                    bc_local.set(u_imp[comp])
+                # Add the boundary conditions to the list
+                bcs_u.append(
+                    fem.dirichletbc(
+                        func,
+                        boundary_dofs[f"{facet_name}_{comp}"],
+                        V_u,
+                    )
+                )
+
         return bcs_u
 
     def update_boundary_conditions(self, l: float):
