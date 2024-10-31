@@ -1072,7 +1072,7 @@ class CrackPhaseSubProblem:
             problem_alpha = PETSc.SNES().create(MPI.COMM_WORLD)
             problem_alpha.setFunction(snes_problem_alpha.F, snes_problem_alpha.b)
             problem_alpha.setJacobian(snes_problem_alpha.J, snes_problem_alpha.A)
-            problem_alpha.setTolerances(atol=1e-5, rtol=1e-9, stol=1e-7, max_it=10_000)
+            problem_alpha.setTolerances(atol=1e-9, rtol=1e-9, stol=1e-7, max_it=10_000)
 
             # Set the SNES
             problem_alpha.setType("vinewtonrsls")
@@ -1103,11 +1103,12 @@ class CrackPhaseSubProblem:
             problem_alpha.setHessian(tao_problem_alpha.J, tao_problem_alpha.A)
 
             # Set up the solver
-            problem_alpha.setType("bntl") # btnr
+            # problem_alpha.setType("bntl")     # Time alpha: 8.5020e+00s
+            problem_alpha.setType("bntr")
 
             # Set the tolerances
             # opts.setValue("tao_gatol", 1e-5) # Value of the residual
-            opts.setValue("tao_grtol", 1e-4)  # Relative change in the residual
+            opts.setValue("tao_grtol", 1e-5)  # Relative change in the residual
             # opts.setValue("tao_gttol", 1e-9)
             opts.setValue("tao_max_it", 10_000)
 
@@ -1272,7 +1273,7 @@ class CrackPhaseSubProblem:
             PETSc.SNES.ConvergedReason.DIVERGED_LINEAR_SOLVE,
             PETSc.SNES.ConvergedReason.DIVERGED_MAX_IT,
             PETSc.SNES.ConvergedReason.DIVERGED_FNORM_NAN,
-            # PETSc.SNES.ConvergedReason.DIVERGED_TR_REDUCTION
+            PETSc.TAO.ConvergedReason.DIVERGED_TR_REDUCTION,
         ]
         while reason in restart_reasons:
             if self.petsc_solver == "snes":

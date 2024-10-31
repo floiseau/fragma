@@ -1,3 +1,5 @@
+import itertools
+
 import numpy as np
 
 import ufl
@@ -337,8 +339,12 @@ class FractureModel(ElasticModel):
             )
         # Check for model specific parameters
         if self.dis_model in ["Foc2", "Foc4"]:
-            self.tau = parse_parameter(pars["mechanical"]["tau"], domain)
-            self.omega = parse_parameter(pars["mechanical"]["omega"], domain)
+            self.Gc = parse_parameter(pars["mechanical"]["Gc"], domain)
+            self.D2 = parse_parameter(pars["mechanical"]["D2"], domain)
+            self.P2 = parse_parameter(pars["mechanical"]["P2"], domain)
+        if self.dis_model in ["Foc4"]:
+            self.D4 = parse_parameter(pars["mechanical"]["D4"], domain)
+            self.P4 = parse_parameter(pars["mechanical"]["P4"], domain)
 
     def a(self, alpha):
         """
@@ -507,19 +513,16 @@ class FractureModel(ElasticModel):
         # Check the model
         match self.dis_model:
             case "Foc2":
-                # TODO Replace the anisotropy tensor representation by the harmonic decomposition (or another tensor decomposition depending on the indicial symmetries !!!)
-                # Parameters
-                omega = self.omega
-                tau = self.tau
-                # Define the anistropy tensor
+                # Define 2-order identity
                 id2 = ufl.Identity(2)
-                D = ufl.as_tensor(
-                    [
-                        [ufl.cos(2 * omega), ufl.sin(2 * omega)],
-                        [ufl.sin(2 * omega), -ufl.cos(2 * omega)],
-                    ]
-                )
-                B = id2 - tau * D
+                # Define the covariant
+                h2_np = np.empty((2, 2))
+                h2_np[0, 0] = -self.D2 * ufl.cos(2 * self.P2)  # Idenpendent components
+                h2_np[0, 1] = -self.D2 * ufl.sin(2 * self.P2)
+                h2_np[1, 1] = -h2_np[0, 0]  # Traceless condition
+                h2_np[1, 0] = h2_np[0, 1]  # Symmetry conditions
+                h2 = ufl.as_tensor(h2_np)
+                B = id2 + h2
                 # Define the anisotropy function
                 grada = ufl.grad(alpha)
                 grad2 = ufl.outer(grada, grada)
@@ -527,39 +530,50 @@ class FractureModel(ElasticModel):
                 # Define the dissipation terms
                 dissipated_energy = Gc / cw * (self.w(alpha) / ell + ell * phi2) * dx
             case "Foc4":
-                # TODO Replace the anisotropy tensor representation by the harmonic decomposition (or another tensor decomposition depending on the indicial symmetries !!!)
-                # TODO Replace the anisotropy tensor representation by the harmonic decomposition (or another tensor decomposition depending on the indicial symmetries !!!)
-                # TODO Replace the anisotropy tensor representation by the harmonic decomposition (or another tensor decomposition depending on the indicial symmetries !!!)
-                # TODO Replace the anisotropy tensor representation by the harmonic decomposition (or another tensor decomposition depending on the indicial symmetries !!!)
-                # TODO Replace the anisotropy tensor representation by the harmonic decomposition (or another tensor decomposition depending on the indicial symmetries !!!)
-                # Parameters
-                omega = self.omega
-                tau = self.tau
-                # Define the anistropy tensor
+                # Define constants
                 id2 = ufl.Identity(2)
-                D_np = np.empty((2, 2, 2, 2))
-                D_np[0, 0, 0, 0] = -ufl.cos(4 * omega)
-                D_np[1, 1, 1, 1] = D_np[0, 0, 0, 0]
-                D_np[0, 0, 1, 1] = ufl.cos(4 * omega)
-                D_np[1, 1, 0, 0] = D_np[0, 0, 1, 1]
-                D_np[0, 1, 0, 1] = D_np[0, 0, 1, 1]
-                D_np[1, 0, 1, 0] = D_np[0, 0, 1, 1]
-                D_np[0, 1, 1, 0] = D_np[0, 0, 1, 1]
-                D_np[1, 0, 0, 1] = D_np[0, 0, 1, 1]
-                D_np[0, 0, 0, 1] = -ufl.sin(4 * omega)
-                D_np[0, 0, 1, 0] = D_np[0, 0, 0, 1]
-                D_np[0, 1, 0, 0] = D_np[0, 0, 0, 1]
-                D_np[1, 0, 0, 0] = D_np[0, 0, 0, 1]
-                D_np[1, 1, 1, 0] = ufl.sin(4 * omega)
-                D_np[1, 1, 0, 1] = D_np[1, 1, 1, 0]
-                D_np[1, 0, 1, 1] = D_np[1, 1, 1, 0]
-                D_np[0, 1, 1, 1] = D_np[1, 1, 1, 0]
-                D = ufl.as_tensor(D_np)
-                B = ufl.outer(id2, id2) - tau * D
-                # Define the anisotropy function
+                id4_np = np.empty((2, 2, 2, 2))
+                indices = itertools.product(range(2), range(2), range(2), range(2))
+                for i, j, k, l in indices:
+                    id4_np[i, j, k, l] = (
+                        1 / 2 * (id2[i, k] * id2[j, l] + id2[i, l] * id2[j, k])
+                    )
+                id4 = ufl.as_tensor(id4_np)
+                # Define the 2nd order covariant
+                h2_np = np.empty((2, 2))
+                h2_np[0, 0] = -self.D2 * ufl.cos(2 * self.P2)  # Idenpendent components
+                h2_np[0, 1] = -self.D2 * ufl.sin(2 * self.P2)
+                h2_np[1, 1] = -h2_np[0, 0]  # Traceless condition
+                h2_np[1, 0] = h2_np[0, 1]  # Symmetry conditions
+                h2 = ufl.as_tensor(h2_np)
+                # Define the 4th order covariant
+                h4_np = np.empty((2, 2, 2, 2))
+                h4_np[0, 0, 0, 0] = self.D4 * ufl.cos(
+                    4 * self.P4
+                )  # Idenpendent components
+                h4_np[0, 0, 0, 1] = self.D4 * ufl.sin(4 * self.P4)
+                h4_np[0, 0, 1, 1] = -h4_np[0, 0, 0, 0]  # Traceless conditions
+                h4_np[0, 1, 1, 1] = -h4_np[0, 0, 0, 1]
+                h4_np[1, 1, 1, 1] = h4_np[0, 0, 0, 0]
+                h4_np[0, 0, 1, 0] = h4_np[0, 0, 0, 1]  # Symmetries conditions
+                h4_np[0, 1, 0, 0] = h4_np[0, 0, 0, 1]
+                h4_np[1, 0, 0, 0] = h4_np[0, 0, 0, 1]
+                h4_np[1, 1, 0, 0] = h4_np[0, 0, 1, 1]
+                h4_np[0, 1, 0, 1] = h4_np[0, 0, 1, 1]
+                h4_np[1, 0, 1, 0] = h4_np[0, 0, 1, 1]
+                h4_np[1, 0, 0, 1] = h4_np[0, 0, 1, 1]
+                h4_np[0, 1, 1, 0] = h4_np[0, 0, 1, 1]
+                h4_np[1, 0, 1, 1] = h4_np[0, 1, 1, 1]
+                h4_np[1, 1, 0, 1] = h4_np[0, 1, 1, 1]
+                h4_np[1, 1, 1, 0] = h4_np[0, 1, 1, 1]
+                h4 = ufl.as_tensor(h4_np)
+                # Define the anistropy tensor
+                B = id4 + 1.0 / 2.0 * (ufl.outer(id2, h2) + ufl.outer(h2, id2)) + h4
+                # Compute the crack phase gradient
                 grada = ufl.grad(alpha)
                 grad2 = ufl.outer(grada, grada)
                 grad4 = ufl.outer(grad2, grad2)
+                # Compute the surface energy
                 phi4 = ufl.inner(B, grad4)
                 # Define the dissipation terms
                 dissipated_energy = Gc / cw * (self.w(alpha) / ell + ell**3 * phi4) * dx
