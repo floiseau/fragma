@@ -57,7 +57,8 @@ class FractureProblem(BaseProblem):
         # Define the fracture phase field
         self.V_alpha = fem.functionspace(self.domain.mesh, ("Lagrange", 1))
         alpha = fem.Function(self.V_alpha, name="CrackPhase")
-        self.state = {"u": u, "alpha": alpha}
+        alpha0 = alpha.copy()
+        self.state = {"u": u, "alpha": alpha, "alpha0": alpha0}
 
     def define_model(self, domain):
         """
@@ -128,6 +129,7 @@ class FractureProblem(BaseProblem):
         u, alpha = self.state["u"], self.state["alpha"]
         # Define state at previous iteration for error computation
         u_old, alpha_old = u.copy(), alpha.copy()
+        self.state["alpha0"].x.array[:] = alpha_old.x.array
         # Initialize the errors
         error_u, error_a = 0, 0
         # Get previous displacement (for over-relaxation)

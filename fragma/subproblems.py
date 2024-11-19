@@ -467,9 +467,9 @@ class DisplacementSubProblem:
         if direct_solver:
             petsc_options = {
                 "ksp_type": "preonly",
-                "pc_type": "cholesky",
-                "pc_factor_mat_solver_type": "cholmod",
-                # "pc_factor_mat_solver_type": "mumps",
+                "pc_type": "lu",
+                # "pc_factor_mat_solver_type": "cholmod",
+                "pc_factor_mat_solver_type": "mumps",
             }
         else:
             petsc_options = {
@@ -1076,12 +1076,14 @@ class CrackPhaseSubProblem:
 
             # Set the SNES
             problem_alpha.setType("vinewtonrsls")
+            # problem_alpha.setType("vinewtonssls")
 
             # Set the KSP
             problem_alpha.getKSP().setType("preonly")
             problem_alpha.getKSP().getPC().setType("cholesky")
-            problem_alpha.getKSP().getPC().setFactorSolverType("mumps")
-            # problem_alpha.getKSP().getPC().setFactorSolverType("cholmod")
+            problem_alpha.getKSP().getPC().setFactorSolverType("cholmod")
+            # problem_alpha.getKSP().getPC().setType("lu")
+            # problem_alpha.getKSP().getPC().setFactorSolverType("mumps")
 
             # # Set the KSP
             # problem_alpha.getKSP().setType("cg")
@@ -1103,12 +1105,17 @@ class CrackPhaseSubProblem:
             problem_alpha.setHessian(tao_problem_alpha.J, tao_problem_alpha.A)
 
             # Set up the solver
-            # problem_alpha.setType("bntl")     # Time alpha: 8.5020e+00s
-            problem_alpha.setType("bntr")
+            problem_alpha.setType("bntl")
+            opts.setValue("tao_trust0", 0.1)
+
+            # problem_alpha.setType("bnls")
+            # problem_alpha.setType("bntl")
+            # problem_alpha.setType("bqnls")
+            # problem_alpha.setType("bncg")
 
             # Set the tolerances
-            # opts.setValue("tao_gatol", 1e-5) # Value of the residual
-            opts.setValue("tao_grtol", 1e-5)  # Relative change in the residual
+            # opts.setValue("tao_gatol", 1e-6)  # Value of the residual
+            # opts.setValue("tao_grtol", 1e-4)  # Relative change in the residual
             # opts.setValue("tao_gttol", 1e-9)
             opts.setValue("tao_max_it", 10_000)
 

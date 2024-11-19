@@ -251,7 +251,7 @@ class ElasticModel(BaseModel):
             Elastic energy.
         """
         # Get the integrands
-        dx = ufl.Measure("dx", domain=domain.mesh)
+        dx = ufl.Measure("dx", domain=domain.mesh, metadata={"quadrature_degree": 12})
         # Compute the effective elasticity tensor
         ela_eff = self.ela_eff(state)
         # Compute the elastic strain
@@ -307,7 +307,7 @@ class FractureModel(ElasticModel):
         # Get the degradation model
         model_par = pars["model"]["model"]
         if model_par in ["AT1", "AT2"]:
-            self.deg_model = "AT"
+            self.deg_model = model_par
         else:
             self.deg_model = model_par.split("-")[0]
         # Get the dissipation model
@@ -338,11 +338,11 @@ class FractureModel(ElasticModel):
                 else 0
             )
         # Check for model specific parameters
-        if self.dis_model in ["Foc2", "Foc4"]:
+        if self.dis_model in ["Foc2", "Foc4", "RMBRAT1", "RMBRAT2"]:
             self.Gc = parse_parameter(pars["mechanical"]["Gc"], domain)
             self.D2 = parse_parameter(pars["mechanical"]["D2"], domain)
             self.P2 = parse_parameter(pars["mechanical"]["P2"], domain)
-        if self.dis_model in ["Foc4"]:
+        if self.dis_model in ["Foc4", "RMBRAT1", "RMBRAT2"]:
             self.D4 = parse_parameter(pars["mechanical"]["D4"], domain)
             self.P4 = parse_parameter(pars["mechanical"]["P4"], domain)
 
@@ -364,7 +364,7 @@ class FractureModel(ElasticModel):
         alpha_res = self.alpha_res
         # Compute a
         match self.deg_model:
-            case "AT" | "Foc2":
+            case "AT1" | "AT2" | "Foc2" | "RMBR":
                 return (1 - alpha) ** 2 + alpha_res
             case "KKL":
                 return 4 * (1 - alpha) ** 3 - 4 * (1 - alpha) ** 3 + alpha_res
@@ -412,9 +412,9 @@ class FractureModel(ElasticModel):
         """
         # Compute w
         match self.dis_model:
-            case "AT1":
+            case "AT1" | "RMBRAT1":
                 return alpha
-            case "AT2" | "Foc2":
+            case "AT2" | "Foc2" | "RMBRAT2":
                 return alpha**2
             case "DW":
                 return 16 * alpha**2 * (1 - alpha) ** 2
@@ -423,7 +423,7 @@ class FractureModel(ElasticModel):
                 return 3 / bw * alpha**4
             case _:
                 raise ValueError(
-                    f"The degradation model named '{self.dis_model}' does not exists."
+                    f"The dissipation model named '{self.dis_model}' does not exists."
                 )
 
     def wp(self, alpha):
@@ -455,9 +455,9 @@ class FractureModel(ElasticModel):
             Normalization coefficient.
         """
         match self.dis_model:
-            case "AT1":
+            case "AT1" | "RMBRAT1":
                 return 8 / 3
-            case "AT2" | "Foc2":
+            case "AT2" | "Foc2" | "RMBRAT2":
                 return 2
             case "DW":
                 return 4 * 2 / 3
@@ -465,7 +465,7 @@ class FractureModel(ElasticModel):
                 return 4
             case _:
                 raise ValueError(
-                    f"The degradation model named '{self.dis_model}' does not exists."
+                    f"The dissipation model named '{self.dis_model}' does not exists."
                 )
 
     def ela_eff(self, state):
@@ -503,7 +503,7 @@ class FractureModel(ElasticModel):
 
         """
         # Get the integrands
-        dx = ufl.Measure("dx", domain=domain.mesh)
+        dx = ufl.Measure("dx", domain=domain.mesh, metadata={"quadrature_degree": 12})
         # Get state variables
         alpha = state["alpha"]
         # Get the fracture parameters
@@ -577,7 +577,26 @@ class FractureModel(ElasticModel):
                 phi4 = ufl.inner(B, grad4)
                 # Define the dissipation terms
                 dissipated_energy = Gc / cw * (self.w(alpha) / ell + ell**3 * phi4) * dx
-            case _:
+            case "RMBRAT1" | "RMBRAT2":
+                alpha_0 = state["alpha0"]
+                grada0 = ufl.grad(alpha_0)
+                phi = ufl.conditional(
+                    ufl.ge(ufl.sqrt(grada0[0] ** 2 + grada0[1] ** 2), 1e-12),
+                    ufl.atan2(-grada0[1], grada0[0]),
+                    np.pi / 2,
+                )
+                theta = phi - np.pi / 2
+                Gc = self.Gc * (
+                    1
+                    + self.D2 * ufl.cos(2 * (theta - self.P2))
+                    + self.D4 * ufl.cos(4 * (theta - self.P4))
+                ) ** (1 / 4)
+
+                wa = self.w(alpha)
+                grada = ufl.grad(alpha)
+                grada_grada = ufl.dot(grada, grada)
+                dissipated_energy = Gc / cw * (wa / ell + ell * grada_grada) * dx
+            case "AT1" | "AT2" | "DW":
                 # Compute the anisotropy matrix
                 A = ufl.as_tensor(np.eye(domain.mesh.geometry.dim))
                 # Add the higher order terms if the model is anisotropic
@@ -602,6 +621,10 @@ class FractureModel(ElasticModel):
                         + ell * ufl.dot(ufl.grad(alpha), A * ufl.grad(alpha))
                     )
                     * dx
+                )
+            case _:
+                raise ValueError(
+                    f"The dissipation model {self.dis_model} does not exists."
                 )
         # Define the total energy
         return dissipated_energy
