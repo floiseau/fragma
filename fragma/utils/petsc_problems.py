@@ -62,7 +62,7 @@ class SNESProblem:
         # Assemble the vector
         dolfinx.fem.petsc.assemble_vector(b, self.L)
         # Apply boundary conditions
-        dolfinx.fem.petsc.apply_lifting(b, [self.a], bcs=[self.bcs], x0=[x], scale=-1.0)
+        dolfinx.fem.petsc.apply_lifting(b, [self.a], bcs=[self.bcs], x0=[x], alpha=-1.0)
         b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
         dolfinx.fem.petsc.set_bc(b, self.bcs, x, -1.0)
 
@@ -122,9 +122,9 @@ class TAOProblem:
         # Connection between ranks in the vector x: FORWARD
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         # We copy the vector x in the vector u
-        x.copy(self.u.vector)
+        x.copy(self.u.x.petsc_vec)
         # Connection between ranks in the vector u in the class
-        self.u.vector.ghostUpdate(
+        self.u.x.petsc_vec.ghostUpdate(
             addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD
         )
         local_res = dolfinx.fem.assemble_scalar(dolfinx.fem.form(self.obj))
@@ -144,9 +144,9 @@ class TAOProblem:
         # Connection between ranks in the vector x: FORWARD
         x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
         # We copy the vector x in the vector u
-        x.copy(self.u.vector)
+        x.copy(self.u.x.petsc_vec)
         # Connection between ranks in the vector u in the class
-        self.u.vector.ghostUpdate(
+        self.u.x.petsc_vec.ghostUpdate(
             addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD
         )
 
@@ -155,7 +155,7 @@ class TAOProblem:
 
         dolfinx.fem.petsc.assemble_vector(F, self.L)
         # Include the boundary conditions using the lifting technique
-        dolfinx.fem.petsc.apply_lifting(F, [self.a], bcs=[self.bcs], x0=[x], scale=-1.0)
+        dolfinx.fem.petsc.apply_lifting(F, [self.a], bcs=[self.bcs], x0=[x], alpha=-1.0)
         # Connection between ranks in the vector x: REVERSE
         F.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
         # Redefine the function F with the boundary condition.

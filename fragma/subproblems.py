@@ -254,7 +254,8 @@ class DisplacementSubProblem:
                     V_u.sub(comp).collapse()[0]
                 )
                 # Update the load
-                with self.bcu_funcs[facet_name][comp].vector.localForm() as bc_local:
+                func = self.bcu_funcs[facet_name][comp]
+                with func.x.petsc_vec.localForm() as bc_local:
                     bc_local.set(u_imp[comp])
                 # Add the boundary conditions to the list
                 bcs_u.append(
@@ -278,7 +279,7 @@ class DisplacementSubProblem:
                 # Define an FEM function (to control the BC)
                 func = fem.Function(V_u.sub(comp).collapse()[0])
                 # Update the load
-                with func.vector.localForm() as bc_local:
+                with func.x.petsc_vec.localForm() as bc_local:
                     bc_local.set(u_imp[comp])
                 # Add the boundary conditions to the list
                 bcs_u.append(
@@ -310,7 +311,7 @@ class DisplacementSubProblem:
                 if isnan(self.u_imp_max[facet_name][comp]):
                     continue
                 # Update the load function
-                with load_func.vector.localForm() as bc_local:
+                with load_func.x.petsc_vec.localForm() as bc_local:
                     bc_local.set(
                         default_scalar_type(l * self.u_imp_max[facet_name][comp])
                     )
@@ -1123,11 +1124,13 @@ class CrackPhaseSubProblem:
         self.alpha_lb = alpha.copy()
         self.alpha_ub = alpha.copy()
         # Set the upper bound
-        with self.alpha_ub.vector.localForm() as alpha_ub_local:
+        with self.alpha_ub.x.petsc_vec.localForm() as alpha_ub_local:
             alpha_ub_local.set(1.0)
-        fem.set_bc(self.alpha_ub.vector, bcs_alpha)
+        fem.set_bc(self.alpha_ub.x.petsc_vec, bcs_alpha)
         # Set the crack phrase boundary bound (Note: they are passed as reference and not as values)
-        problem_alpha.setVariableBounds(self.alpha_lb.vector, self.alpha_ub.vector)
+        problem_alpha.setVariableBounds(
+            self.alpha_lb.x.petsc_vec, self.alpha_ub.x.petsc_vec
+        )
 
         # Set options
         problem_alpha.setFromOptions()
@@ -1190,7 +1193,7 @@ class CrackPhaseSubProblem:
         alpha.interpolate(alpha_init)
 
         # Add the boundary conditions
-        fem.set_bc(alpha.vector, bcs_alpha)
+        fem.set_bc(alpha.x.petsc_vec, bcs_alpha)
 
     def define_boundary_condition_functions(self, domain, state):
         """
@@ -1265,7 +1268,7 @@ class CrackPhaseSubProblem:
             Current time.
         """
         # Update the crack phase lower bound
-        self.alpha.vector.copy(self.alpha_lb.vector)
+        self.alpha.x.petsc_vec.copy(self.alpha_lb.x.petsc_vec)
         # Update of boundary conditions ?
         self.update_boundary_conditions(t)
 
@@ -1284,9 +1287,9 @@ class CrackPhaseSubProblem:
         ]
         while reason in restart_reasons:
             if self.petsc_solver == "snes":
-                self.problem_alpha.solve(None, self.alpha.vector)
+                self.problem_alpha.solve(None, self.alpha.x.petsc_vec)
             elif self.petsc_solver == "tao":
-                self.problem_alpha.solve(self.alpha.vector)
+                self.problem_alpha.solve(self.alpha.x.petsc_vec)
             self.alpha.x.scatter_forward()
             # Check if the solver converged
             reason = self.problem_alpha.getConvergedReason()

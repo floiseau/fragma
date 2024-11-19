@@ -3,6 +3,8 @@ import dolfinx
 from dolfinx import la
 from dolfinx.fem import FunctionSpace
 
+dtype = PETSc.ScalarType
+
 
 def build_elasticity_nullspace(V: FunctionSpace):
     match V.mesh.geometry.dim:
@@ -19,8 +21,7 @@ def build_3D_elasticity_nullspace(V: FunctionSpace):
 
     https://docs.fenicsproject.org/dolfinx/main/python/demos/demo_elasticity.html
     """
-    # Define dtype
-    dtype = PETSc.ScalarType
+
     # Create vectors that will span the nullspace
     bs = V.dofmap.index_map_bs
     length0 = V.dofmap.index_map.size_local
@@ -45,11 +46,12 @@ def build_3D_elasticity_nullspace(V: FunctionSpace):
     b[5][dofs[2]] = x1
     b[5][dofs[1]] = -x2
 
-    _basis = [x._cpp_object for x in basis]
-    dolfinx.cpp.la.orthonormalize(_basis)
-    assert dolfinx.cpp.la.is_orthonormal(_basis)
+    la.orthonormalize(basis)
 
-    basis_petsc = [PETSc.Vec().createWithArray(x[: bs * length0], bsize=3, comm=V.mesh.comm) for x in b]  # type: ignore
+    basis_petsc = [
+        PETSc.Vec().createWithArray(x[: bs * length0], bsize=3, comm=V.mesh.comm)  # type: ignore
+        for x in b
+    ]
     return PETSc.NullSpace().create(vectors=basis_petsc)  # type: ignore
 
 
@@ -58,10 +60,9 @@ def build_2D_elasticity_nullspace(V: FunctionSpace):
 
     https://docs.fenicsproject.org/dolfinx/main/python/demos/demo_elasticity.html
     """
+
     # Get the dimension
     dim = V.mesh.geometry.dim
-    # Define dtype
-    dtype = PETSc.ScalarType
     # Create vectors that will span the nullspace
     bs = V.dofmap.index_map_bs
     length0 = V.dofmap.index_map.size_local
@@ -71,20 +72,21 @@ def build_2D_elasticity_nullspace(V: FunctionSpace):
     # Get dof indices for each subspace (x and y dofs)
     dofs = [V.sub(i).dofmap.list.flatten() for i in range(dim)]
 
-    # Set the two translational rigid body modes
+    # Set the three translational rigid body modes
     for i in range(dim):
         b[i][dofs[i]] = 1.0
 
-    # Set the rotational rigid body mode
+    # Set the three rotational rigid body modes
     x = V.tabulate_dof_coordinates()
     dofs_block = V.dofmap.list.flatten()
     x0, x1 = x[dofs_block, 0], x[dofs_block, 1]
     b[2][dofs[0]] = -x1
     b[2][dofs[1]] = x0
 
-    _basis = [x._cpp_object for x in basis]
-    dolfinx.cpp.la.orthonormalize(_basis)
-    assert dolfinx.cpp.la.is_orthonormal(_basis)
+    la.orthonormalize(basis)
 
-    basis_petsc = [PETSc.Vec().createWithArray(x[: bs * length0], bsize=dim, comm=V.mesh.comm) for x in b]  # type: ignore
+    basis_petsc = [
+        PETSc.Vec().createWithArray(x[: bs * length0], bsize=dim, comm=V.mesh.comm)  # type: ignore
+        for x in b
+    ]
     return PETSc.NullSpace().create(vectors=basis_petsc)  # type: ignore
