@@ -468,9 +468,10 @@ class DisplacementSubProblem:
         if direct_solver:
             petsc_options = {
                 "ksp_type": "preonly",
-                "pc_type": "lu",
-                # "pc_factor_mat_solver_type": "cholmod",
-                "pc_factor_mat_solver_type": "mumps",
+                "pc_type": "cholesky",
+                "pc_factor_mat_solver_type": "cholmod",
+                # "pc_type": "cholesky",
+                # "pc_factor_mat_solver_type": "mumps",
             }
         else:
             petsc_options = {
@@ -1073,25 +1074,10 @@ class CrackPhaseSubProblem:
             problem_alpha = PETSc.SNES().create(MPI.COMM_WORLD)
             problem_alpha.setFunction(snes_problem_alpha.F, snes_problem_alpha.b)
             problem_alpha.setJacobian(snes_problem_alpha.J, snes_problem_alpha.A)
-            problem_alpha.setTolerances(atol=1e-9, rtol=1e-9, stol=1e-7, max_it=10_000)
+            problem_alpha.setTolerances(atol=1e-8, rtol=1e-9, stol=1e-7, max_it=100)
 
             # Set the SNES
             problem_alpha.setType("vinewtonrsls")
-            # problem_alpha.setType("vinewtonssls")
-
-            # Set the KSP
-            problem_alpha.getKSP().setType("preonly")
-            problem_alpha.getKSP().getPC().setType("cholesky")
-            problem_alpha.getKSP().getPC().setFactorSolverType("cholmod")
-            # problem_alpha.getKSP().getPC().setType("lu")
-            # problem_alpha.getKSP().getPC().setFactorSolverType("mumps")
-
-            # # Set the KSP
-            # problem_alpha.getKSP().setType("cg")
-            # problem_alpha.getKSP().setTolerances(atol=1e-10, rtol=1e-6)
-            # problem_alpha.getKSP().getPC().setType("mg")
-            # problem_alpha.getKSP().getPC().setMGLevels(1)
-            # problem_alpha.getKSP().setInitialGuessNonzero(True)
 
         elif self.petsc_solver == "tao":
             # Define the crack phase problem
