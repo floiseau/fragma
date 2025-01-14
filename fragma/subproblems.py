@@ -98,7 +98,7 @@ class DisplacementSubProblem:
         # Store the model
         self.model = model
         # Initialize the load factor
-        self.l = 0.0
+        self.l = pars["loading"].get("l0", 0.0)
         # Store varying displacement loading
         self.u_imp_max = pars["loading"].get("u_imp_max", {})
         # Store time-controlled displacement loading
@@ -519,7 +519,7 @@ class DisplacementSubProblem:
         else:
             petsc_options = {
                 "ksp_type": "cg",
-                "ksp_rtol": 1e-8,
+                "ksp_rtol": 1e-9,
                 "ksp_atol": 1e-10,
                 "ksp_max_it": 1000,
                 "pc_type": "gamg",
@@ -609,8 +609,8 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         # Store the constraint
         self.constraint = pars["loading"]["constraint"]
         # Initialize the load factor
-        self.l0 = 0.0
-        self.l = 0.0
+        self.l0 = pars["loading"].get("l0", 0.0)
+        self.l = pars["loading"].get("l0", 0.0)
         # Initialize the iteration counter
         self.k = 1
         # Get the load factor increment in the initial phase
@@ -1117,7 +1117,7 @@ class CrackPhaseSubProblem:
             problem_alpha = PETSc.SNES().create(MPI.COMM_WORLD)
             problem_alpha.setFunction(snes_problem_alpha.F, snes_problem_alpha.b)
             problem_alpha.setJacobian(snes_problem_alpha.J, snes_problem_alpha.A)
-            problem_alpha.setTolerances(atol=1e-8, rtol=1e-9, stol=1e-7, max_it=100)
+            problem_alpha.setTolerances(atol=1e-7, rtol=1e-7, stol=1e-7, max_it=100)
 
             # Set the SNES
             problem_alpha.setType("vinewtonrsls")
