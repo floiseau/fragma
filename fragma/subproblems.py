@@ -15,6 +15,7 @@ from dolfinx import fem, default_scalar_type
 from dolfinx.fem.petsc import LinearProblem
 import ufl
 
+from utils.parameter_parser import parse_boundary_condition
 from utils.build_nullspace import build_elasticity_nullspace
 from utils.petsc_problems import SNESProblem, TAOProblem
 
@@ -100,6 +101,8 @@ class DisplacementSubProblem:
         self.l = 0.0
         # Store varying displacement loading
         self.u_imp_max = pars["loading"].get("u_imp_max", {})
+        # Store time-controlled displacement loading
+        self.tc_u = pars["loading"].get("time-controlled_u", {})
         # Store constant displacement loading
         self.u_imp_const = pars["loading"].get("u_imp_const", {})
         # Store the force loading
@@ -290,6 +293,36 @@ class DisplacementSubProblem:
                     )
                 )
 
+        print("\n████ INITIALIZE TIME-CONTROLLED DISPLACEMENT BOUNDARY CONDITIONS")
+        # Create variables to store bcs and loading functions
+        self.tc_bcu_exprs_funcs = {}
+        # Iterage through the displacement loadings
+        for facet_name, u_imp in self.tc_u.items():
+            # Create a subdict for each components
+            self.tc_bcu_exprs_funcs[facet_name] = {}
+            # Iterate through the axis
+            for comp in range(dim):
+                # Check if the DOF is imposed
+                bc_par = self.tc_u[facet_name][comp]
+                if isinstance(bc_par, float) and isnan(bc_par):
+                    continue
+                # Define an FEM function (to control the BC)
+                func = fem.Function(V_u.sub(comp).collapse()[0])
+                # Initialize the load
+                bc_expr = parse_boundary_condition(u_imp[comp])
+                # Create the fem function
+                func.interpolate(lambda xx: bc_expr(xx, 0))
+                # Add the boundary conditions to the list
+                bcs_u.append(
+                    fem.dirichletbc(
+                        func,
+                        boundary_dofs[f"{facet_name}_{comp}"],
+                        V_u,
+                    )
+                )
+                # Store the expression and the function
+                self.tc_bcu_exprs_funcs[facet_name][comp] = (bc_expr, func)
+
         return bcs_u
 
     def update_boundary_conditions(self, l: float):
@@ -316,6 +349,16 @@ class DisplacementSubProblem:
                         default_scalar_type(l * self.u_imp_max[facet_name][comp])
                     )
                 load_func.x.scatter_forward()
+        # Iterate through the time-controlled boundary conditions
+        for facet_name, load_dict in self.tc_bcu_exprs_funcs.items():
+            # Iterate through the components
+            for comp, (expr, func) in load_dict.items():
+                # Check if the DOF is imposed
+                bc_par = self.tc_u[facet_name][comp]
+                if isinstance(bc_par, float) and isnan(bc_par):
+                    continue
+                else:
+                    func.interpolate(lambda xx: expr(xx, l))
         # Iterate through the force load functions
         for facet_name, f_imp in self.f_imp_max.items():
             self.bcf_funcs[facet_name].value = l * np.array(f_imp)

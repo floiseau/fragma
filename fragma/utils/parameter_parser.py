@@ -60,3 +60,12 @@ def parse_parameter(par, domain, export_lambda: bool = False):
             return par_fem_func
         else:
             return par_fem_func, par_lambda
+
+
+def parse_boundary_condition(bc_expr):
+    # Declare the coordinate symbol
+    x, l = sp.Symbol("x"), sp.Symbol("l")
+    # Parse the expression using sympy
+    bc_expr_sp = sp.utilities.lambdify([x, l], bc_expr, "numpy")
+    # Return the fem function
+    return bc_expr_sp
