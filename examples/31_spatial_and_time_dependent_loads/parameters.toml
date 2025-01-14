@@ -1,0 +1,34 @@
+[model]
+name = "elasticity"
+dim = 2
+2D_assumption = "plane_strain"
+
+[mesh]
+msh_file = "mesh.msh"
+
+[mesh.physical_groups]
+left  = 5
+right = 6
+
+[mechanical]
+E = 30e9
+nu = 0.3
+
+[loading]
+dl = 0.1
+[loading.u_imp_max]
+left  = [0, 0]
+[loading.time-controlled_u]
+right = ["cos(l) + 0.0*x[0]", "sin(l) + 0.0*x[0]"]
+
+[end]
+criterion = "t"
+t_max = 200
+
+[postprocess]
+
+[postprocess.probes]
+displacement= [
+    [ 0, 0.5, 0],
+    [10, 0.5, 0],
+]
