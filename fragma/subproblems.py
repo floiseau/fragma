@@ -7,6 +7,7 @@ This module provides classes for defining sub-problems that solve for displaceme
 from math import isnan
 
 import numpy as np
+from scipy.optimize import root_scalar
 from mpi4py import MPI
 from petsc4py import PETSc
 
@@ -723,13 +724,49 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # Compute the stress
                 sig2 = self.model.sig({"u": self.u2})
                 # Define the expressions
-                weight_expr = self.model.ap(alpha)
+                weight_expr = self.model.ap(alpha) * alpha
                 energy_expr = 1 / 2 * ufl.inner(eps2, sig2)
                 # Define the form
                 dx = ufl.Measure("dx", domain=domain.mesh)
                 self.tau2_form = fem.form(-weight_expr * energy_expr * dx)
                 # Initialize tau2
                 self.tau2 = fem.assemble_scalar(self.tau2_form)
+
+            case "maxt_crack_driving_variable":
+                # Generate a function space for history fields
+                V_H = fem.functionspace(domain.mesh, ("DG", 0))
+                # Define the functions
+                self.H0 = fem.Function(V_H, name="H0")
+                # self.l_min_func = fem.Function(V_H, name="H0")
+                # Define an fem constant for lambda
+                self.l_const = fem.Constant(domain.mesh, self.l)
+                # Define the form to compute H_bar
+                alpha = self.alpha
+                eps2 = self.model.eps({"u": self.u2})
+                sig2 = self.model.sig({"u": self.u2})
+                H_bar = (
+                    -1
+                    / 2
+                    * self.l_const**2
+                    * self.model.ap(alpha)
+                    * alpha
+                    * ufl.inner(eps2, sig2)
+                )
+                # Define the residual functional
+                dx = ufl.Measure("dx", domain=domain.mesh)
+                dH_expr = ufl.max_value(H_bar - self.H0, 0) * dx
+                self.dH_form = fem.form(dH_expr)
+                # # Define the expression to obtain the minimum load factor
+                # l_min_ufl = self.H0 / (
+                #     -1 / 2 * self.model.ap(alpha) * alpha * ufl.inner(eps2, sig2)
+                # )
+                # self.l_min_expr = fem.Expression(
+                #     l_min_ufl, V_H.element.interpolation_points()
+                # )
+                # Define the expression to update H0
+                self.H0_update_expr = fem.Expression(
+                    ufl.max_value(H_bar, self.H0), V_H.element.interpolation_points()
+                )
 
             case "max_crack_driving_variable":
                 # Get crack phase
@@ -838,6 +875,10 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # Update the previous tau value
                 self.tau2 = fem.assemble_scalar(self.tau2_form)
                 self.tau0 = self.l**2 * self.tau2
+
+            case "maxt_crack_driving_variable":
+                # Update the previous history field
+                self.H0.interpolate(self.H0_update_expr)
 
             case "max_crack_driving_variable":
                 # Update the previous tau value
@@ -983,6 +1024,27 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 self.tau2 = fem.assemble_scalar(self.tau2_form)
                 # Compute the load factor
                 self.l = np.sqrt((self.dtau + self.tau0) / self.tau2)
+
+            case "maxt_crack_driving_variable":
+                # Define a function to compute the history field increment
+                def f(l):
+                    self.l_const.value = l
+                    return fem.assemble_scalar(self.dH_form) - self.dtau
+
+                # # Find the lower bound of the load factor
+                # self.l_min_func.interpolate(self.l_min_expr)
+                # l_min = np.sqrt(np.nanmin(self.l_min_func.x.array[:]))
+                # print(l_min)
+
+                # Find the load factor
+                res = root_scalar(f, x0=self.l)
+                # Check if the
+                if np.isclose(res.root, self.l):
+                    res = root_scalar(f, x0=self.l + self.dl)
+                # Compute the load factor
+                self.l = res.root
+                # Update the constant value
+                self.l_const.value = self.l
 
             case "max_crack_driving_variable":
                 if self.k < 2:
