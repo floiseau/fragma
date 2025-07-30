@@ -249,7 +249,7 @@ class PostProcessor:
                 # Get the associated form
                 form = fem.form(expr)
                 # Store the expression
-                name = f"F_{comp+1} ({facet_name})"
+                name = f"F_{comp + 1} ({facet_name})"
                 self.reaction_forces_forms[name] = form
                 self.scalar_data[name] = fem.assemble_scalar(form)
 
@@ -339,11 +339,11 @@ class PostProcessor:
             case "plane_strain":
                 Ep = model.E / (1 - model.nu**2)
         # Store the forms
-        self.K_I_form = fem.form(Ep / 2 * I_I)
-        self.K_II_form = fem.form(Ep / 2 * I_II)
+        self.K_I_form = fem.form(I_I)
+        self.K_II_form = fem.form(I_II)
         # Compute the SIFs
-        self.scalar_data["K_I"] = fem.assemble_scalar(self.K_I_form)
-        self.scalar_data["K_II"] = fem.assemble_scalar(self.K_II_form)
+        self.scalar_data["K_I"] = Ep / 2 * fem.assemble_scalar(self.K_I_form)
+        self.scalar_data["K_II"] = Ep / 2 * fem.assemble_scalar(self.K_II_form)
 
     def compute_auxiliary_displacement_field(
         self, domain, model, xc, phi0, K_I_aux, K_II_aux
