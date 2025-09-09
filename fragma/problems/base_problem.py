@@ -63,6 +63,10 @@ class BaseProblem:
         # Define subproblems
         self.subproblems = {}
         self.define_subproblems()
+        # Check if path-following is used
+        self.use_path_following = (
+            pars.get("loading", {}).get("constraint", None) is not None
+        )
         # Initialize post-processing
         postprocess_pars = pars.get("postprocess", {})
         self.postprocessor = PostProcessor(
