@@ -684,7 +684,7 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 u0_norm = ufl.sqrt(ufl.dot(u0, u0))
                 # Get the coefficients expressions
                 self.a0_expr = fem.Expression(
-                    ufl.dot(u0, u0) / u0_norm,
+                    -ufl.dot(u0, u0) / u0_norm,
                     V_u_scal.element.interpolation_points(),
                 )
                 self.a1_expr = fem.Expression(
