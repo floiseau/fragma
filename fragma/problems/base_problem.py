@@ -73,9 +73,10 @@ class BaseProblem:
             self.domain, self.model, self.state, postprocess_pars
         )
         # Initialize the exporter
-        functions_to_export = list(self.state.values()) + list(
-            self.postprocessor.funcs.values()
-        )
+        functions_to_export = [
+            f for f in self.state.values() if f.name != "PreviousCrackPhase"
+        ]
+        functions_to_export += list(self.postprocessor.funcs.values())
         scalar_data = self.postprocessor.scalar_data
         probes = self.postprocessor.probes
         self.exporter = Exporter(

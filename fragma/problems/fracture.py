@@ -58,6 +58,7 @@ class FractureProblem(BaseProblem):
         self.V_alpha = fem.functionspace(self.domain.mesh, ("Lagrange", 1))
         alpha = fem.Function(self.V_alpha, name="CrackPhase")
         alpha0 = alpha.copy()
+        alpha0.name = "PreviousCrackPhase"
         self.state = {"u": u, "alpha": alpha, "alpha0": alpha0}
 
     def define_model(self, domain):
