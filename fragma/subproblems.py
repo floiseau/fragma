@@ -1075,10 +1075,10 @@ class CrackPhaseSubProblem:
         # Initialize PETSc options
         opts = PETSc.Options()
         opts.setValue("snes_monitor", None)
+        # opts.setValue("snes_vi_monitor", None)
         opts.setValue("snes_converged_reason", None)
         opts.setValue("tao_monitor", None)
         opts.setValue("tao_converged_reason", None)
-        opts.setValue("snes_vi_monitor", None)
 
         # Choose the solver for the bounded nonlinear problem
         if self.petsc_solver == "snes":
