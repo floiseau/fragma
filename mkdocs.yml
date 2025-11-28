@@ -1,0 +1,19 @@
+site_name: "fragma : Phase-field fracture solver"
+site_url: https://floiseau.github.io/fragma/
+repo_url: https://github.com/floiseau/fragma
+repo_name: floiseau/fragma
+theme:
+  name: material
+  palette:
+    scheme: slate
+  features:
+    - content.code.copy
+markdown_extensions:
+  - admonition
+plugins:
+- search
+- mkdocstrings:
+    handlers:
+      python:
+        options:
+          docstring_style: numpy

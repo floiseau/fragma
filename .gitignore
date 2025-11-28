@@ -1,5 +1,6 @@
 # Ignore the ressources directory
 ressources/
+site/
 
 # Ignore test examples
 examples/T*
