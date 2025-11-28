@@ -15,7 +15,7 @@ setuptools.setup(
     project_urls={
         "Documentation": "https://floiseau.github.io/fragma/",
     },
-    packages=["fragma"],
+    packages=["fragma", "fragma.utils"],
     license="GPLv3",
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -23,14 +23,14 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     install_requires=[
-        "pyvista",
-        "gmsh",
         "sympy",
         "scipy",
+        "pyvista",
+        # "gmsh",
     ],
     entry_points={
         "console_scripts": [
-            "fragma = fragma:fragma",
+            "fragma = fragma:run_fragma",
         ]
     },
 )

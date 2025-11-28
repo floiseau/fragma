@@ -4,7 +4,7 @@ import numpy as np
 
 import ufl
 
-from utils.parameter_parser import parse_parameter
+from .utils.parameter_parser import parse_parameter
 
 
 class BaseModel:

@@ -16,9 +16,9 @@ from dolfinx import fem, default_scalar_type
 from dolfinx.fem.petsc import LinearProblem
 import ufl
 
-from utils.parameter_parser import parse_boundary_condition
-from utils.build_nullspace import build_elasticity_nullspace
-from utils.petsc_problems import SNESProblem, TAOProblem
+from .utils.parameter_parser import parse_boundary_condition
+from .utils.build_nullspace import build_elasticity_nullspace
+from .utils.petsc_problems import SNESProblem, TAOProblem
 
 
 def create_displacement_subproblem(pars, domain, state, model):
