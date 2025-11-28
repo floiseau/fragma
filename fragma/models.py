@@ -345,6 +345,10 @@ class FractureModel(ElasticModel):
         if self.dis_model in ["Foc4", "RMBRAT1", "RMBRAT2"]:
             self.D4 = parse_parameter(pars["mechanical"]["D4"], domain)
             self.P4 = parse_parameter(pars["mechanical"]["P4"], domain)
+        if self.dis_model in ["Foc2X"]:
+            self.Gc = parse_parameter(pars["mechanical"]["Gc"], domain)
+            self.th0 = parse_parameter(pars["mechanical"]["th0"], domain)
+            self.dG = parse_parameter(pars["mechanical"]["dG"], domain)
 
     def a(self, alpha):
         """
@@ -364,7 +368,7 @@ class FractureModel(ElasticModel):
         alpha_res = self.alpha_res
         # Compute a
         match self.deg_model:
-            case "AT1" | "AT2" | "Foc2" | "RMBR":
+            case "AT1" | "AT2" | "Foc2" | "Foc2X" | "RMBR":
                 return (1 - alpha) ** 2 + alpha_res
             case "KKL":
                 return 4 * (1 - alpha) ** 3 - 4 * (1 - alpha) ** 3 + alpha_res
@@ -414,7 +418,7 @@ class FractureModel(ElasticModel):
         match self.dis_model:
             case "AT1" | "RMBRAT1":
                 return alpha
-            case "AT2" | "Foc2" | "RMBRAT2":
+            case "AT2" | "Foc2" | "Foc2X" | "RMBRAT2":
                 return alpha**2
             case "DW":
                 return 16 * alpha**2 * (1 - alpha) ** 2
@@ -457,7 +461,7 @@ class FractureModel(ElasticModel):
         match self.dis_model:
             case "AT1" | "RMBRAT1":
                 return 8 / 3
-            case "AT2" | "Foc2" | "RMBRAT2":
+            case "AT2" | "Foc2" | "Foc2X" | "RMBRAT2":
                 return 2
             case "DW":
                 return 4 * 2 / 3
@@ -528,6 +532,22 @@ class FractureModel(ElasticModel):
                 grad2 = ufl.outer(grada, grada)
                 phi2 = ufl.inner(B, grad2)
                 # Define the dissipation terms
+                dissipated_energy = Gc / cw * (self.w(alpha) / ell + ell * phi2) * dx
+            case "Foc2X":
+                # Define the anisotropy tensor
+                A_np = np.empty((2, 2))
+                A_np[0, 0] = -ufl.sin(2 * self.th0)
+                A_np[0, 1] = ufl.cos(2 * self.th0)
+                A_np[1, 0] = ufl.cos(2 * self.th0)
+                A_np[1, 1] = ufl.sin(2 * self.th0)
+                A = ufl.as_tensor(A_np)
+                # Define the anisotropy function
+                grada = ufl.grad(alpha)
+                grad2 = ufl.outer(grada, grada)
+                phi2_1 = ufl.inner(grada, grada)
+                phi2_2 = self.dG / Gc * ufl.inner(A, grad2) ** 2
+                phi2 = (phi2_1 + phi2_2) ** 2
+                # Define the dissipation term
                 dissipated_energy = Gc / cw * (self.w(alpha) / ell + ell * phi2) * dx
             case "Foc4":
                 # Define constants

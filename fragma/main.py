@@ -1,13 +1,12 @@
 """
-FRAGMA
+fragma
 ======
 
-This script runs a solver for fracture problems in anisotropic media using a phase-field model.
+This is the entry point of fragma.
+This script parses the parameter file, generate the problem object, and run its solve method.
 """
 
 import tomllib
-
-from dolfinx import log
 
 from problems.elasticity import ElasticityProblem
 from problems.fracture import FractureProblem
