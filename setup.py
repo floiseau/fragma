@@ -12,6 +12,9 @@ setuptools.setup(
     long_description=open("README.md", "r").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/floiseau/fragma",
+    project_urls={
+        "Documentation": "https://floiseau.github.io/fragma/",
+    },
     packages=["fragma"],
     license="GPLv3",
     classifiers=[
