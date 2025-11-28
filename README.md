@@ -1,8 +1,8 @@
 # fragma
 
-[![GitHub](https://img.shields.io/badge/GitHub-Repo-blue)](https://github.com/floiseau/fragma)
-[![PyPI](https://img.shields.io/badge/PyPI-Package-green)](https://pypi.org/project/fragma/)
-[![Documentation](https://img.shields.io/badge/Docs-Read-blueviolet)](https://floiseau.github.io/fragma)
+[![GitHub](https://img.shields.io/badge/GitHub-fragma-blue)](https://github.com/floiseau/fragma)
+[![PyPI](https://img.shields.io/badge/PyPI-fragma-green)](https://pypi.org/project/fragma/)
+[![Documentation](https://img.shields.io/badge/Docs-fragma-blueviolet)](https://floiseau.github.io/fragma)
 
 A **finite element solver** for simulating crack propagation using the **phase-field approach to fracture**.
 Built on top of [`fenicsx`](https://fenicsproject.org/), `fragma` supports advanced features like:
