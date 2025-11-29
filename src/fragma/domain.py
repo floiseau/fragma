@@ -46,9 +46,10 @@ class Domain:
         # Read the mesh from GMSH
         print("Mesh reading output:")
         msh_file = mesh_pars["msh_file"]
-        self.mesh, self.cell_tags, self.facet_tags = io.gmshio.read_from_msh(
-            msh_file, MPI.COMM_WORLD, gdim=dim
-        )
+        self.mesh_data = io.gmsh.read_from_msh(msh_file, MPI.COMM_WORLD, gdim=dim)
+        self.mesh = self.mesh_data.mesh
+        self.cell_tags = self.mesh_data.cell_tags
+        self.facet_tags = self.mesh_data.facet_tags
         # Locate the physical groups
         self.__locate_physical_groups(mesh_pars["physical_groups"])
 

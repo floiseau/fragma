@@ -544,7 +544,10 @@ class PostProcessor:
         bc_out = fem.dirichletbc(default_scalar_type(0.0), dofs_out, V_theta)
         bcs = [bc_out, bc_inner]
         # Solve the problem
-        problem = fem.petsc.LinearProblem(a, L, bcs=bcs)
+        problem = fem.petsc.LinearProblem(
+            a, L, bcs=bcs, petsc_options_prefix="theta_linear_problem"
+        )
+
         return problem.solve()
 
     def __initialize_T_stress(self, domain, model, state, postprocess_pars):

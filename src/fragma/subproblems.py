@@ -537,6 +537,7 @@ class DisplacementSubProblem:
             L=ufl.rhs(E_du),
             bcs=bcs_u,
             u=u,
+            petsc_options_prefix="elastic_linear_problem",
             petsc_options=petsc_options,
         )
         # Define the null space (optimization with GAMG PC)
