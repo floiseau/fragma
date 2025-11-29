@@ -12,14 +12,24 @@ Built on top of [`fenicsx`](https://fenicsproject.org/), `fragma` supports advan
 The full documentation is available at: [https://floiseau.github.io/fragma](https://floiseau.github.io/fragma).
 
 ---
- ## 📦 Installation
+## 📦 Installation
 
-Create and activate a dedicated environment:
+To run [`fragma`](https://github.com/floiseau/fragma), install the required Python modules in a dedicated environment:
 
+1. Create and activate a dedicated environment:
 ```bash
 conda create -n fragma
 conda activate fragma
-conda install -c conda-forge fenics-dolfinx mpich pyvista python-gmsh mpi4py petsc4py scipy sympy
+```
+2. Install FEniCSx (with GMSH):
+```bash
+conda install -c conda-forge fenics-dolfinx pyvista mpich gmsh # Linux and macOS
+conda install -c conda-forge fenics-dolfinx pyvista pyamg gmsh # Windows
+```
+3. Install `fragma`:
+```bash
+pip install .       # If you cloned the repo
+pip install fragma  # If you want to install from pypi
 ```
 
 ---

@@ -16,9 +16,23 @@ It has several non-classic features :
 
 To run [`fragma`](https://github.com/floiseau/fragma), install the required Python modules in a dedicated environment:
 
-    conda create -n fragma
-    conda activate fragma
-    conda install -c conda-forge fenics-dolfinx mpich pyvista python-gmsh mpi4py petsc4py scipy sympy
+1. Create and activate a dedicated environment:
+
+        conda create -n fragma
+        conda activate fragma
+
+2. Install FEniCSx (with GMSH):
+
+        conda install -c conda-forge fenics-dolfinx pyvista mpich gmsh # Linux and macOS
+        conda install -c conda-forge fenics-dolfinx pyvista pyamg gmsh # Windows
+
+3. Install `fragma`:
+
+
+        pip install .       # If you cloned the repo
+        pip install fragma  # If you want to install from pypi
+
+
 
 ---
 

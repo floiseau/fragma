@@ -9,7 +9,7 @@ def choose_end_checker(end_pars, time_stepper, postprocessor):
 
     Parameters
     ----------
-    end_criterion : dict
+    end_pars : dict
         Parameters used to determine the end of the simulation.
     time_stepper : ProportionalTimeStepper
         Time stepper for time integration during simulation.
@@ -48,7 +48,7 @@ class TimeEndChecker:
     ----------
     stepper : ProportionalTimeStepper
         Time stepper for time integration during simulation.
-    stepper : int
+    t_max : int
         Final time step.
     """
 
@@ -60,7 +60,7 @@ class TimeEndChecker:
         ----------
         time_stepper : ProportionalTimeStepper
             Time stepper for time integration during simulation.
-        stepper : int
+        t_max : int
             Final time step.
         """
         # Store the time stepper

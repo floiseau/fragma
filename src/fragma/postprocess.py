@@ -259,8 +259,8 @@ class PostProcessor:
 
         Parameters
         ----------
-        mesh : dolfinx.Mesh
-            The mesh representing the domain.
+        model : fragma.domain.Domain
+            The domain.
         model: BaseModel
             The material model.
         state : dict
@@ -294,7 +294,9 @@ class PostProcessor:
         Initialize the computation of the stress intensity factors.
 
         This method is based on the interaction integral.
-        The implementation of this method is based in [1]__ and the implementation of Pietro Gazzi.
+        The implementation of this method is based in [1] and the implementation of Pietro Gazzi.
+
+        [1] De Lorenzis, L., Maurini, C. (2021). Basic computational methods for fracture mechanics. NEWFRAC Core School 2021 Course, Notebook 2-LEFM, [https://gitlab.com/newfrac/CORE-school/newfrac-core-numerics/-/blob/master/02-LEFM.ipynb](https://gitlab.com/newfrac/CORE-school/newfrac-core-numerics/-/blob/master/02-LEFM.ipynb).
 
         Parameters
         ----------
@@ -307,7 +309,6 @@ class PostProcessor:
         postprocess_pars : dict
             Dictionary containing parameters for post-processing.
 
-        .. [1] De Lorenzis, L., Maurini, C. (2021). Basic computational methods for fracture mechanics. NEWFRAC Core School 2021 Course, Notebook 2-LEFM, https://gitlab.com/newfrac/CORE-school/newfrac-core-numerics/-/blob/master/02-LEFM.ipynb.
         """
         # Check if the energy release rate must be computated
         if "SIFs" not in postprocess_pars:
@@ -350,8 +351,12 @@ class PostProcessor:
     ):
         """Compute the auxialary displacement fields used in the SIFs calculations.
 
-        The expression for the auxiliary field comes from [1]__.
-        Note that the expression from [2]__ seems to be wrong.
+        The expression for the auxiliary field comes from [1].
+        Note that the expression from [2] seems to be wrong.
+
+        [1] Smith, D. J., Ayatollahi, M. R., & Pavier, M. J. (2001). The role of T-stress in brittle fracture for linear elastic materials under mixed-mode loading. Fatigue & Fracture of Engineering Materials & Structures, 24(2), 137–150. [https://doi.org/10.1046/j.1460-2695.2001.00377.x](https://doi.org/10.1046/j.1460-2695.2001.00377.x)
+
+        [2] Yu, H., & Kuna, M. (2021). Interaction integral method for computation of crack parameters K-T -- A review. Engineering Fracture Mechanics, 249, 107722. [https://doi.org/10.1016/j.engfracmech.2021.107722](https://doi.org/10.1016/j.engfracmech.2021.107722)
 
         Notes
         -----
@@ -372,8 +377,6 @@ class PostProcessor:
         K_II_aux: float
             SIF in mode II for the auxiliary displacement field.
 
-        .. [1] Smith, D. J., Ayatollahi, M. R., & Pavier, M. J. (2001). The role of T-stress in brittle fracture for linear elastic materials under mixed-mode loading. Fatigue & Fracture of Engineering Materials & Structures, 24(2), 137–150. https://doi.org/10.1046/j.1460-2695.2001.00377.x
-        .. [2] Yu, H., & Kuna, M. (2021). Interaction integral method for computation of crack parameters K-T -- A review. Engineering Fracture Mechanics, 249, 107722. https://doi.org/10.1016/j.engfracmech.2021.107722
         """
         # Get the cartesian coordinates
         x = ufl.SpatialCoordinate(domain.mesh)
@@ -445,7 +448,9 @@ class PostProcessor:
         Initialize the computation of the energy release rate.
 
         It contains the initialization of the $G-\theta$ method.
-        The implementation of this method is based in [1]__ and the implementation of Pietro Gazzi.
+        The implementation of this method is based in [1] and the implementation of Pietro Gazzi.
+
+        [1] De Lorenzis, L., Maurini, C. (2021). Basic computational methods for fracture mechanics. NEWFRAC Core School 2021 Course, Notebook 2-LEFM, [https://gitlab.com/newfrac/CORE-school/newfrac-core-numerics/-/blob/master/02-LEFM.ipynb](https://gitlab.com/newfrac/CORE-school/newfrac-core-numerics/-/blob/master/02-LEFM.ipynb).
 
         Parameters
         ----------
@@ -458,7 +463,6 @@ class PostProcessor:
         postprocess_pars : dict
             Dictionary containing parameters for post-processing.
 
-        .. [1] De Lorenzis, L., Maurini, C. (2021). Basic computational methods for fracture mechanics. NEWFRAC Core School 2021 Course, Notebook 2-LEFM, https://gitlab.com/newfrac/CORE-school/newfrac-core-numerics/-/blob/master/02-LEFM.ipynb.
         """
         # Check if the energy release rate must be computated
         if "energy_release_rate" not in postprocess_pars:
@@ -555,7 +559,9 @@ class PostProcessor:
         Initialize the computation of the energy release rate.
 
         It contains the initialization of the $G-\theta$ method.
-        The implementation of this method is based in [1]__ and the implementation of Pietro Gazzi.
+        The implementation of this method is based in [1] and the implementation of Pietro Gazzi.
+
+        [1] De Lorenzis, L., Maurini, C. (2021). Basic computational methods for fracture mechanics. NEWFRAC Core School 2021 Course, Notebook 2-LEFM, [https://gitlab.com/newfrac/CORE-school/newfrac-core-numerics/-/blob/master/02-LEFM.ipynb](https://gitlab.com/newfrac/CORE-school/newfrac-core-numerics/-/blob/master/02-LEFM.ipynb).
 
         Parameters
         ----------
@@ -568,7 +574,6 @@ class PostProcessor:
         postprocess_pars : dict
             Dictionary containing parameters for post-processing.
 
-        .. [1] De Lorenzis, L., Maurini, C. (2021). Basic computational methods for fracture mechanics. NEWFRAC Core School 2021 Course, Notebook 2-LEFM, https://gitlab.com/newfrac/CORE-school/newfrac-core-numerics/-/blob/master/02-LEFM.ipynb.
         """
         # Check if the energy release rate must be computated
         if "T_stress" not in postprocess_pars:
