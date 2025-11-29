@@ -23,8 +23,8 @@ conda activate fragma
 ```
 2. Install FEniCSx (with GMSH):
 ```bash
-conda install -c conda-forge fenics-dolfinx pyvista mpich gmsh # Linux and macOS
-conda install -c conda-forge fenics-dolfinx pyvista pyamg gmsh # Windows
+conda install -c conda-forge fenics-dolfinx=0.10 pyvista mpich gmsh # Linux and macOS
+conda install -c conda-forge fenics-dolfinx=0.10 pyvista pyamg gmsh # Windows
 ```
 3. Install `fragma`:
 ```bash
