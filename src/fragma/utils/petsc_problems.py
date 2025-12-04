@@ -38,7 +38,10 @@ class SNESProblem:
         self.u = u
 
         # Create matrix and vector to be used for assembly of the non-linear problem
-        self.b = dolfinx.fem.petsc.create_vector(self.L)
+
+        self.b = dolfinx.fem.petsc.create_vector(
+            dolfinx.fem.extract_function_spaces(self.L)
+        )
         self.A = dolfinx.fem.petsc.create_matrix(self.a)
 
     def F(self, snes: PETSc.SNES, x: PETSc.Vec, b: PETSc.Vec):
