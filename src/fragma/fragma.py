@@ -6,6 +6,7 @@ This is the entry point of fragma.
 This script parses the parameter file, generate the problem object, and run its solve method.
 """
 
+import argparse
 import tomllib
 
 from .problems import ElasticityProblem, FractureProblem
@@ -28,8 +29,21 @@ def run_fragma():
     """
     )
 
+    # Get the CLI arguments
+    parser = argparse.ArgumentParser(
+        description="Run fragma with a specified config file."
+    )
+    parser.add_argument(
+        "-c",
+        "--config_file",
+        type=str,
+        help="Path to the TOML config file (default: parameters.toml)",
+        default="parameters.toml",
+    )
+    args = parser.parse_args()
+
     # Read the parameter file
-    with open("parameters.toml", "rb") as toml_file:
+    with open(args.config_file, "rb") as toml_file:
         pars = tomllib.load(toml_file)
 
     # Choose the problem
