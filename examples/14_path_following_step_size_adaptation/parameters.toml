@@ -27,8 +27,8 @@ ell = 0.015e-3
 [loading]
 constraint = "max_strain_inc"
 dl = 1e-2
-dtau = 2e-3
-k_opt = 24
+dtau = 0.1
+k_opt = 32
 [loading.nodal_displacement]
 origin.x = [0, 0, 0]
 origin.u = [0, 0]
