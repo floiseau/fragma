@@ -22,7 +22,7 @@ alpha_res = 1e-6
 E = 3e9
 nu = 0.4
 Gc = 380
-ell = 2e-3 # Real value 0.3e-3
+ell = 2e-3
 
 [loading]
 [loading.u_imp_max]
