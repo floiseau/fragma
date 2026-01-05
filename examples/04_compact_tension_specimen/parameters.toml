@@ -8,11 +8,11 @@ model = "AT1"
 msh_file = "mesh.msh"
 
 [mesh.physical_groups]
-bot_pin = 22
-top_pin = 23
-crack = 21
-non-crackable_1 = 22
-non-crackable_2 = 23
+bot_pin = 2
+top_pin = 3
+crack = 4
+non-crackable_1 = 2
+non-crackable_2 = 3
 
 [numerical]
 utol = 1e-6
