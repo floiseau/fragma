@@ -92,9 +92,7 @@ class PostProcessor:
         shape = eps_ufl.ufl_shape
         V_eps = fem.functionspace(mesh, ("DG", 0, shape))
         # Convert the strain into an expression
-        self.exprs["eps"] = fem.Expression(
-            eps_ufl, V_eps.element.interpolation_points()
-        )
+        self.exprs["eps"] = fem.Expression(eps_ufl, V_eps.element.interpolation_points)
         # Set the strain function
         self.funcs["eps"] = fem.Function(V_eps, name="Strain")
         self.funcs["eps"].interpolate(self.exprs["eps"])
@@ -118,9 +116,7 @@ class PostProcessor:
         shape = sig_ufl.ufl_shape
         V_sig = fem.functionspace(mesh, ("DG", 0, shape))
         # Convert the stress into an expression
-        self.exprs["sig"] = fem.Expression(
-            sig_ufl, V_sig.element.interpolation_points()
-        )
+        self.exprs["sig"] = fem.Expression(sig_ufl, V_sig.element.interpolation_points)
         # Set the stress function
         self.funcs["sig"] = fem.Function(V_sig, name="Stress")
         self.funcs["sig"].interpolate(self.exprs["sig"])
@@ -150,15 +146,10 @@ class PostProcessor:
         # V_cvd = fem.functionspace(mesh, ("Lagrange", 1))
         V_cvd = fem.functionspace(mesh, ("DG", 0))
         # Convert the crack-driving variable into an expression
-        self.exprs["cdv_e"] = fem.Expression(
-            cdv_e, V_cvd.element.interpolation_points()
-        )
-        self.exprs["cdv_w"] = fem.Expression(
-            cdv_w, V_cvd.element.interpolation_points()
-        )
-        self.exprs["cdv"] = fem.Expression(
-            cvd_ufl, V_cvd.element.interpolation_points()
-        )
+        interp_points = V_cvd.element.interpolation_points
+        self.exprs["cdv_e"] = fem.Expression(cdv_e, interp_points)
+        self.exprs["cdv_w"] = fem.Expression(cdv_w, interp_points)
+        self.exprs["cdv"] = fem.Expression(cvd_ufl, interp_points)
         # Set the crack-driving variable function
         self.funcs["cdv_e"] = fem.Function(V_cvd, name="Crack-driving Variable Energy")
         self.funcs["cdv_e"].interpolate(self.exprs["cdv_e"])

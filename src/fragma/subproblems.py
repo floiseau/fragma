@@ -635,7 +635,7 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 eps0 = self.model.eps({"u": self.u0})
                 eps0_norm = ufl.sqrt(ufl.inner(eps0, eps0))
                 self.eps0_normed_expr = fem.Expression(
-                    eps0 / eps0_norm, V_eps.element.interpolation_points()
+                    eps0 / eps0_norm, V_eps.element.interpolation_points
                 )
                 self.eps0_normed = fem.Function(V_eps, name="NormedStrain")
                 # Get the strain increment values
@@ -648,10 +648,10 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                     a0_ufl *= 1 - self.alpha0 + 1e-12
                     a1_ufl *= 1 - self.alpha0 + 1e-12
                 self.a0_expr = fem.Expression(
-                    a0_ufl, V_eps_scal.element.interpolation_points()
+                    a0_ufl, V_eps_scal.element.interpolation_points
                 )
                 self.a1_expr = fem.Expression(
-                    a1_ufl, V_eps_scal.element.interpolation_points()
+                    a1_ufl, V_eps_scal.element.interpolation_points
                 )
                 self.a0 = fem.Function(V_eps_scal, name="a0")
                 self.a1 = fem.Function(V_eps_scal, name="a1")
@@ -686,11 +686,11 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # Get the coefficients expressions
                 self.a0_expr = fem.Expression(
                     -ufl.dot(u0, u0) / u0_norm,
-                    V_u_scal.element.interpolation_points(),
+                    V_u_scal.element.interpolation_points,
                 )
                 self.a1_expr = fem.Expression(
                     ufl.dot(u, u0) / u0_norm,
-                    V_u_scal.element.interpolation_points(),
+                    V_u_scal.element.interpolation_points,
                 )
                 # Define the functions
                 self.a0 = fem.Function(V_u_scal, name="a0")
@@ -747,7 +747,7 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
                 # )
                 # Define the expression to update H0
                 self.H0_update_expr = fem.Expression(
-                    ufl.max_value(H_bar, self.H0), V_H.element.interpolation_points()
+                    ufl.max_value(H_bar, self.H0), V_H.element.interpolation_points
                 )
 
         # Initialization of the step size adapation
@@ -761,8 +761,6 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
     def define_problem(self, domain, state, model, bcs_u):
         """
         Define the partitioned displacement problem.
-
-        Note: The problem is defined and solved in terms of displacement increments.
 
         Parameters
         ----------
@@ -778,8 +776,8 @@ class DisplacementPartitionedSubProblem(DisplacementSubProblem):
         # Store the displacement state variable
         self.u = state["u"]
         # Store the crack phase variable
-        self.alpha = state["alpha"]
-        self.alpha0 = state["alpha0"]  # TODO: TO REMOVE ?????
+        self.alpha = state.get("alpha", None)
+        self.alpha0 = state.get("alpha0", None)
         # Create the displacement at previous load step
         self.u0 = self.u.copy()
         # Define displacement functions
