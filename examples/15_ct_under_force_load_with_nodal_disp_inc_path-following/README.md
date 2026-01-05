@@ -1,12 +1,11 @@
 # Path-following using nodal displacement increment
 
-
 ## Description
 
 This exemple simulates the crack propagation in a CT specimen with a load control method based nodal displacement increment.
-The boundary conditions uses an force control.
+The boundary conditions is an applied force.
 This loading is controlled using by the displacement difference between two points, each on a face of the notch.
-It correponds to a controlled of the loading based on the Crack Mouth Openning Displacement (CMOD).
+It correponds to a control of the load based on the Crack Mouth Openning Displacement (CMOD).
 
 ## Expected results
 

@@ -32,15 +32,15 @@ ell = 1e-3
 [loading]
 constraint = "nodal_disp_inc"
 selection = [
-    {"pos"= [0.001, 0.0167, 0], "coeff"= [-1, -1]},
-    {"pos"= [0.001, 0.0217, 0], "coeff"= [1, 1]},
+    {"pos"= [-0.01, 0.0239375, 0], "coeff"= [-1, -1]},
+    {"pos"= [-0.01, 0.0240625, 0], "coeff"= [1, 1]},
 ]
-dtau = 1e-6 # 1e-2
+dtau = 5e-6
 dl = 1e-2
 [loading.u_imp_max]
-top_pin = [0, 0]
+bot_pin = [0, 0]
 [loading.f_imp_max]
-bot_pin = [0, -1e8]
+top_pin = [0, 1e8]
 
 [end]
 criterion = "elastic_energy_drop"
@@ -51,6 +51,6 @@ reaction_forces = ["bot_pin", "top_pin"]
 
 [postprocess.probes]
 displacement= [
-    [0.001, 0.0167, 0],
-    [0.001, 0.0217, 0],
+    [-0.01, 0.0239375, 0],
+    [-0.01, 0.0240625, 0],
 ]
