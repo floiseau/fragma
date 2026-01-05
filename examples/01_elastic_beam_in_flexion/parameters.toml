@@ -17,7 +17,7 @@ nu = 0.3
 [loading]
 [loading.u_imp_max]
 left  = [  0, 0]
-right = [0.1, nan]
+right = [nan, 0.1]
 
 [end]
 criterion = "t"
