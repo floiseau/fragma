@@ -36,7 +36,7 @@ t_max = 1
 reaction_forces = ["bot", "top"]
 [postprocess.energy_release_rate]
 crack_tip = [0.25e-3, 0.5e-3, 0]
-R_int = 6.4e-6
-R_ext = 1.28e-5
+R_int = 1e-5
+R_ext = 1e-4
 crack_growth_angle = 0
 

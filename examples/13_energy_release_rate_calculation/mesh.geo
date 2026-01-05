@@ -4,10 +4,10 @@ L = 1e-3;
 // Crack tip position
 a = L/4;
 // Numerical
-h_min = 1e-7;
-h = 10*h_min;
-R_int = 64 * h_min;
-R_ext = 128 * h_min;
+h_min = 1e-6;
+h = 1e-5;
+R_int = 1e-5;
+R_ext = 1e-4;
 
 //// Points
 // Bot

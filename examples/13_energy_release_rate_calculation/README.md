@@ -53,7 +53,8 @@ Using Irwin formula in plain strain, we obtain the energy release rate $G = 6267
 ## Expected results
 
 In this exemple, the `probes.csv` files contains the energy release rate $G$.
-Running the exemple gives a value around  $G=6803$ J/m $^2$ which is close the approximate solution given by Lui *et al.* (2015).
+Running the exemple gives a value around  $G=6785$ J/m $^2$ which is close the approximate solution given by Lui *et al.* (2015).
+The difference are likely due to difference in the setup.
 
 ## References
 
