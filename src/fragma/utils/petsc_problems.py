@@ -123,14 +123,14 @@ class TAOProblem:
         =======
         Objective value (float).
         """
-        # Connection between ranks in the vector x: FORWARD
-        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-        # We copy the vector x in the vector u
-        x.copy(self.u.x.petsc_vec)
-        # Connection between ranks in the vector u in the class
-        self.u.x.petsc_vec.ghostUpdate(
-            addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD
-        )
+        # # Connection between ranks in the vector x: FORWARD
+        # x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        # # We copy the vector x in the vector u
+        # x.copy(self.u.x.petsc_vec)
+        # # Connection between ranks in the vector u in the class
+        # self.u.x.petsc_vec.ghostUpdate(
+        #     addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD
+        # )
         local_res = dolfinx.fem.assemble_scalar(dolfinx.fem.form(self.obj))
         global_res = self.u.function_space.mesh.comm.allreduce(local_res, op=MPI.SUM)
 
@@ -145,14 +145,14 @@ class TAOProblem:
         x: Current solution vector.
         F: Vector to assemble the gradient into.
         """
-        # Connection between ranks in the vector x: FORWARD
-        x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
-        # We copy the vector x in the vector u
-        x.copy(self.u.x.petsc_vec)
-        # Connection between ranks in the vector u in the class
-        self.u.x.petsc_vec.ghostUpdate(
-            addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD
-        )
+        #  # Connection between ranks in the vector x: FORWARD
+        #  x.ghostUpdate(addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD)
+        #  # We copy the vector x in the vector u
+        #  x.copy(self.u.x.petsc_vec)
+        #  # Connection between ranks in the vector u in the class
+        #  self.u.x.petsc_vec.ghostUpdate(
+        #      addv=PETSc.InsertMode.INSERT, mode=PETSc.ScatterMode.FORWARD
+        #  )
 
         with F.localForm() as f_local:
             f_local.set(0.0)

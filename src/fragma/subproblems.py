@@ -994,9 +994,9 @@ class CrackPhaseSubProblem:
 
         elif self.petsc_solver == "tao":
             self.solver_tols = {
-                "gatol": solver_pars.get("gatol", 1e-8),
-                "grtol": solver_pars.get("grtol", 1e-8),
-                "gttol": solver_pars.get("gttol", 1e-8),
+                "gatol": solver_pars.get("gatol", 1e-6),
+                "grtol": solver_pars.get("grtol", 1e-6),
+                "gttol": solver_pars.get("gttol", 1e-6),
             }
         # Define the boundary conditions functions
         bcs_alpha = self.define_boundary_condition_functions(domain, state)
