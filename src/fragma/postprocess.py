@@ -331,11 +331,11 @@ class PostProcessor:
             case "plane_strain":
                 Ep = model.E / (1 - model.nu**2)
         # Store the forms
-        self.K_I_form = fem.form(I_I)
-        self.K_II_form = fem.form(I_II)
+        self.I_I_form = fem.form(I_I)
+        self.I_II_form = fem.form(I_II)
         # Compute the SIFs
-        self.scalar_data["K_I"] = Ep / 2 * fem.assemble_scalar(self.K_I_form)
-        self.scalar_data["K_II"] = Ep / 2 * fem.assemble_scalar(self.K_II_form)
+        self.scalar_data["K_I"] = Ep / 2 * fem.assemble_scalar(self.I_I_form)
+        self.scalar_data["K_II"] = Ep / 2 * fem.assemble_scalar(self.I_II_form)
 
     def compute_auxiliary_displacement_field(
         self, domain, model, xc, phi0, K_I_aux, K_II_aux
@@ -376,7 +376,10 @@ class PostProcessor:
         r_vec_init = x - x_tip
         # Rotate the spatial coordinates to match the crack direction
         R = ufl.as_tensor(
-            [[ufl.cos(phi0), -ufl.sin(phi0)], [ufl.sin(phi0), ufl.cos(phi0)]]
+            [
+                [ufl.cos(phi0), -ufl.sin(phi0)],
+                [ufl.sin(phi0), ufl.cos(phi0)],
+            ]
         )
         r_vec = ufl.transpose(R) * r_vec_init
         # Get the polar coordinates
@@ -392,24 +395,20 @@ class PostProcessor:
             case "plane_strain":
                 ka = 3 - 4 * nu
         # Compute the functions f
-        f_I, f_II = [0, 0], [0, 0]
-        f_I[0] = (ka - 1 + 2 * ufl.sin(theta / 2) ** 2) * ufl.cos(theta / 2)
-        f_I[1] = (ka + 1 - 2 * ufl.cos(theta / 2) ** 2) * ufl.sin(theta / 2)
-        f_II[0] = (ka + 1 + 2 * ufl.cos(theta / 2) ** 2) * ufl.sin(theta / 2)
-        f_II[1] = -(ka - 1 - 2 * ufl.sin(theta / 2) ** 2) * ufl.cos(theta / 2)
+        fx_I = ufl.cos(theta / 2) * (ka - 1 + 2 * ufl.sin(theta / 2) ** 2)
+        fy_I = ufl.sin(theta / 2) * (ka + 1 - 2 * ufl.cos(theta / 2) ** 2)
+        fx_II = ufl.sin(theta / 2) * (ka + 1 + 2 * ufl.cos(theta / 2) ** 2)
+        fy_II = -ufl.cos(theta / 2) * (ka - 1 - 2 * ufl.sin(theta / 2) ** 2)
+        # Introduce the factor u_fac
+        u_fac = ufl.sqrt(r / (2 * np.pi)) / (2 * mu)
+        # Compute the displacement field for mode I
+        u_I = K_I_aux * u_fac * ufl.as_vector([fx_I, fy_I])
+        # Compute the displacement field for mode II
+        u_II = K_II_aux * u_fac * ufl.as_vector([fx_II, fy_II])
         # Compute the displacement field
-        ui = (
-            ufl.sqrt(r / (2 * np.pi))
-            / (2 * mu)
-            * ufl.as_vector(
-                [
-                    K_I_aux * f_I[0] + K_II_aux * f_II[0],
-                    K_I_aux * f_I[1] + K_II_aux * f_II[1],
-                ]
-            )
-        )
+        u_tot = R * (u_I + u_II)
         # Rotate the displacement vectors
-        return R * ui
+        return u_tot
 
     def compute_I_integral(self, domain, model, u, u_aux, theta):
         # Compute the gradients
@@ -426,8 +425,8 @@ class PostProcessor:
         grad_theta = ufl.grad(theta)
         # Compute the terms of the interaction integral
         dx = ufl.dx(domain=domain.mesh)
-        Iw12 = 1 / 2 * ufl.inner(sig, eps_aux) * div_theta * dx
-        Iw21 = 1 / 2 * ufl.inner(sig_aux, eps) * div_theta * dx
+        Iw12 = 1.0 / 2.0 * ufl.inner(sig, eps_aux) * div_theta * dx
+        Iw21 = 1.0 / 2.0 * ufl.inner(sig_aux, eps) * div_theta * dx
         Ig12 = ufl.inner(sig, grad_u_aux * grad_theta) * dx
         Ig21 = ufl.inner(sig_aux, grad_u * grad_theta) * dx
         # Compute the interaction integral expression
@@ -513,37 +512,16 @@ class PostProcessor:
         theta_field : dolfinx.fem.Function
             FEM function containing the theta field.
         """
-
-        # Define the distance to the crack tip
-        def distance_to_crack_tip(x):
-            return np.sqrt((x[0] - crack_tip[0]) ** 2 + (x[1] - crack_tip[1]) ** 2)
-
-        # Define the variational problem to define theta
-        V_theta = fem.functionspace(domain.mesh, ("Lagrange", 1))
-        theta, theta_ = ufl.TrialFunction(V_theta), ufl.TestFunction(V_theta)
-        a = ufl.dot(ufl.grad(theta), ufl.grad(theta_)) * ufl.dx
-        L = (
-            fem.Constant(domain.mesh, default_scalar_type(0.0))
-            * theta_
-            * ufl.dx(domain=domain.mesh)
-        )
-        # Set the boundary conditions
-        # Imposing 1 in the inner circle and zero in the outer circle
-        dofs_inner = fem.locate_dofs_geometrical(
-            V_theta, lambda x: distance_to_crack_tip(x) <= R_int
-        )
-        dofs_out = fem.locate_dofs_geometrical(
-            V_theta, lambda x: distance_to_crack_tip(x) >= R_ext
-        )
-        bc_inner = fem.dirichletbc(default_scalar_type(1.0), dofs_inner, V_theta)
-        bc_out = fem.dirichletbc(default_scalar_type(0.0), dofs_out, V_theta)
-        bcs = [bc_out, bc_inner]
-        # Solve the problem
-        problem = fem.petsc.LinearProblem(
-            a, L, bcs=bcs, petsc_options_prefix="theta_linear_problem"
-        )
-
-        return problem.solve()
+        # Get the cartesian coordinates
+        x = ufl.SpatialCoordinate(domain.mesh)
+        # Get the crack tip
+        x_tip = ufl.as_vector(crack_tip[:2])
+        # Get the polar coordinates
+        r = ufl.sqrt(ufl.dot(x - x_tip, x - x_tip))
+        # Define the ufl expression of the theta field
+        theta_temp = (R_ext - r) / (R_ext - R_int)
+        # Clip the value and return
+        return ufl.max_value(0.0, ufl.min_value(theta_temp, 1.0))
 
     def __initialize_T_stress(self, domain, model, state, postprocess_pars):
         """
@@ -676,9 +654,9 @@ class PostProcessor:
             self.scalar_data["T_stress"] = fem.assemble_scalar(self.T_form)
         # Compute SIFs
         if "K_I" in self.scalar_data:
-            self.scalar_data["K_I"] = fem.assemble_scalar(self.K_I_form)
+            self.scalar_data["K_I"] = fem.assemble_scalar(self.I_I_form)
         if "K_II" in self.scalar_data:
-            self.scalar_data["K_II"] = fem.assemble_scalar(self.K_II_form)
+            self.scalar_data["K_II"] = fem.assemble_scalar(self.I_II_form)
 
 
 class Probes:
