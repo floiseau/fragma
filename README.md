@@ -11,6 +11,8 @@ Built on top of [`fenicsx`](https://fenicsproject.org/), `fragma` supports advan
 
 The full documentation is available at: [https://floiseau.github.io/fragma](https://floiseau.github.io/fragma).
 
+*Do no hesitate to contact me for more information ([https://floiseau.github.io/](https://floiseau.github.io/).*
+
 ---
 ## 📦 Installation
 
