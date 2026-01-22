@@ -1,6 +1,6 @@
 [project]
 name = "fragma"
-version="2025.11.29"
+version="2026.01.22"
 authors = [
     {name = "Flavien Loiseau", email = "flavien.loiseau@ensta.fr"},
 ]
