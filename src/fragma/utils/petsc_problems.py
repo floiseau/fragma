@@ -38,7 +38,6 @@ class SNESProblem:
         self.u = u
 
         # Create matrix and vector to be used for assembly of the non-linear problem
-
         self.b = dolfinx.fem.petsc.create_vector(
             dolfinx.fem.extract_function_spaces(self.L)
         )
@@ -107,7 +106,9 @@ class TAOProblem:
         self.a = dolfinx.fem.form(H)
 
         # Create matrix and vector for gradient and Hessian assembly
-        self.b = dolfinx.fem.petsc.create_vector(self.L)
+        self.b = dolfinx.fem.petsc.create_vector(
+            dolfinx.fem.extract_function_spaces(self.L)
+        )
         self.A = dolfinx.fem.petsc.create_matrix(self.a)
 
     def f(self, tao, x):

@@ -3,7 +3,7 @@ ressources/
 site/
 
 # Ignore test examples
-examples/T*
+examples/T_*
 
 # Result files
 *.xdmf
