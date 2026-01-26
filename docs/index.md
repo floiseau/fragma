@@ -1,5 +1,10 @@
 # Overview
 
+[![GitHub](https://img.shields.io/badge/GitHub-fragma-blue)](https://github.com/floiseau/fragma)
+[![PyPI](https://img.shields.io/badge/PyPI-fragma-green)](https://pypi.org/project/fragma/)
+[![Documentation](https://img.shields.io/badge/Docs-fragma-blueviolet)](https://floiseau.github.io/fragma)
+[![Zenodo](https://zenodo.org/badge/doi/10.5281/zenodo.15654994.svg)](https://doi.org/10.5281/zenodo.15654994)
+
 ## Description
 
 [`fragma`](https://github.com/floiseau/fragma) is a 2D **finite element solver** for simulating crack propagation using the **phase-field approach to fracture**.
