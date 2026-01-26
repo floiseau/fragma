@@ -1,5 +1,6 @@
 # fragma
 
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![GitHub](https://img.shields.io/badge/GitHub-fragma-blue)](https://github.com/floiseau/fragma)
 [![PyPI](https://img.shields.io/badge/PyPI-fragma-green)](https://pypi.org/project/fragma/)
 [![Documentation](https://img.shields.io/badge/Docs-fragma-blueviolet)](https://floiseau.github.io/fragma)
